@@ -1,0 +1,1353 @@
+-- ============================================================
+-- IYANKINKA LASER PIW
+-- ============================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local Camera = workspace.CurrentCamera
+
+local player = Players.LocalPlayer
+
+-- Tunggu character
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- ==============================================
+-- COLOR CONFIG (DARK RED GLOW)
+-- ==============================================
+local Colors = {
+    DarkBg = Color3.fromRGB(10, 6, 10),
+    DarkerBg = Color3.fromRGB(8, 4, 8),
+    CardBg = Color3.fromRGB(18, 12, 18),
+    RedGlow = Color3.fromRGB(220, 40, 60),
+    RedDark = Color3.fromRGB(180, 30, 50),
+    RedBright = Color3.fromRGB(255, 60, 80),
+    White = Color3.fromRGB(255, 255, 255),
+    GrayLight = Color3.fromRGB(200, 180, 190),
+    GrayDark = Color3.fromRGB(140, 120, 130),
+    GreenSuccess = Color3.fromRGB(80, 200, 100),
+}
+
+-- Gradient colors (MERAH) untuk background effect
+local GradientColors = {
+    DarkRed = Color3.fromRGB(35, 8, 15),
+    MidRed = Color3.fromRGB(70, 15, 35),
+    BrightRed = Color3.fromRGB(140, 25, 55),
+    LighterRed = Color3.fromRGB(200, 50, 80),
+    LightestRed = Color3.fromRGB(230, 80, 110),
+}
+
+-- ==============================================
+-- DOT EFFECT SYSTEM (macam Meow Hub)
+-- ==============================================
+local mainDots = {}
+local specDots = {}
+
+local function createDotEffect(parent, dotTable)
+    local container = Instance.new("Frame", parent)
+    container.Name = "DotBackground"
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.Position = UDim2.new(0, 0, 0, 0)
+    container.BackgroundTransparency = 1
+    container.ZIndex = 0
+    
+    for i = 1, 40 do
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.new(0, math.random(2, 4), 0, math.random(2, 4))
+        dot.Position = UDim2.new(math.random(), 0, math.random(), 0)
+        dot.BackgroundColor3 = GradientColors.LighterRed
+        dot.BackgroundTransparency = math.random(40, 80) / 100
+        dot.BorderSizePixel = 0
+        dot.Parent = container
+        dot.ZIndex = 0
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = dot
+        
+        dot:SetAttribute("SpeedX", (math.random() - 0.5) * 0.015)
+        dot:SetAttribute("SpeedY", (math.random() - 0.5) * 0.015)
+        dot:SetAttribute("Pulse", math.random() * 2)
+        
+        table.insert(dotTable, dot)
+    end
+    
+    return container
+end
+
+local function updateDots(dotTable, dt)
+    for _, dot in pairs(dotTable) do
+        local sx = dot:GetAttribute("SpeedX") or 0.008
+        local sy = dot:GetAttribute("SpeedY") or 0.008
+        local pulse = dot:GetAttribute("Pulse") or 1
+        
+        local newX = (dot.Position.X.Scale + sx * dt * 30) % 1
+        local newY = (dot.Position.Y.Scale + sy * dt * 30) % 1
+        dot.Position = UDim2.new(newX, 0, newY, 0)
+        dot.BackgroundTransparency = math.sin(tick() * 2 + pulse) * 0.15 + 0.45
+    end
+end
+
+-- ==============================================
+-- NOTIFICATION SYSTEM
+-- ==============================================
+local notifGui = nil
+
+local function ShowNotification(title, message, notifType)
+    if notifGui then notifGui:Destroy() end
+    
+    notifGui = Instance.new("ScreenGui")
+    notifGui.Name = "IYANKINKA_Notif"
+    notifGui.ResetOnSpawn = false
+    notifGui.Parent = player:WaitForChild("PlayerGui")
+    notifGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    notifGui.DisplayOrder = 999
+    
+    local notifFrame = Instance.new("Frame")
+    notifFrame.Size = UDim2.new(0, 260, 0, 48)
+    notifFrame.Position = UDim2.new(0.5, -130, 0, -60)
+    notifFrame.AnchorPoint = Vector2.new(0.5, 0)
+    notifFrame.BackgroundColor3 = Colors.CardBg
+    notifFrame.BackgroundTransparency = 0.05
+    notifFrame.BorderSizePixel = 0
+    notifFrame.Parent = notifGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 10)
+    notifCorner.Parent = notifFrame
+    
+    local notifStroke = Instance.new("UIStroke")
+    notifStroke.Thickness = 1.5
+    if notifType == "success" then
+        notifStroke.Color = Colors.GreenSuccess
+    else
+        notifStroke.Color = Colors.RedBright
+    end
+    notifStroke.Transparency = 0.3
+    notifStroke.Parent = notifFrame
+    
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.fromOffset(32, 32)
+    icon.Position = UDim2.new(0, 10, 0.5, -16)
+    icon.BackgroundTransparency = 1
+    icon.Text = notifType == "success" and "✓" or "⚠"
+    icon.TextColor3 = notifStroke.Color
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 20
+    icon.Parent = notifFrame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -56, 0, 22)
+    titleLabel.Position = UDim2.new(0, 52, 0, 6)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = Colors.White
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 12
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = notifFrame
+    
+    local msgLabel = Instance.new("TextLabel")
+    msgLabel.Size = UDim2.new(1, -56, 0, 18)
+    msgLabel.Position = UDim2.new(0, 52, 0, 26)
+    msgLabel.BackgroundTransparency = 1
+    msgLabel.Text = message
+    msgLabel.TextColor3 = Colors.GrayLight
+    msgLabel.Font = Enum.Font.Gotham
+    msgLabel.TextSize = 9
+    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+    msgLabel.Parent = notifFrame
+    
+    TweenService:Create(notifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+        Position = UDim2.new(0.5, -130, 0, 20)
+    }):Play()
+    
+    task.wait(2.5)
+    
+    TweenService:Create(notifFrame, TweenInfo.new(0.25), {
+        Position = UDim2.new(0.5, -130, 0, -60)
+    }):Play()
+    task.wait(0.25)
+    notifGui:Destroy()
+end
+
+-- ==============================================
+-- LASER EFFECT VARIABLES
+-- ==============================================
+local jacketAnimTrack = nil
+local jacketActive = false
+local spinActive = false
+local glitchActive = false
+local spinConnection = nil
+local glitchConnection = nil
+local spinSpeed = 10
+local glitchIntensity = 1.0
+
+-- ==============================================
+-- LASER FUNCTIONS
+-- ==============================================
+
+local function toggleJacket()
+    jacketActive = not jacketActive
+    
+    if jacketActive then
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://70883871260184"
+        
+        if humanoid then
+            local success, track = pcall(function()
+                return humanoid:LoadAnimation(anim)
+            end)
+            if success then
+                jacketAnimTrack = track
+                jacketAnimTrack.Looped = true
+                jacketAnimTrack.Priority = Enum.AnimationPriority.Movement
+                jacketAnimTrack:Play()
+            end
+        end
+        ShowNotification("Big Jacket", "Activated", "success")
+    else
+        if jacketAnimTrack then
+            pcall(function() jacketAnimTrack:Stop() end)
+            jacketAnimTrack = nil
+        end
+        ShowNotification("Big Jacket", "Deactivated", "warning")
+    end
+end
+
+local function toggleSpin()
+    spinActive = not spinActive
+    
+    if spinActive then
+        if spinConnection then spinConnection:Disconnect() end
+        spinConnection = RunService.Heartbeat:Connect(function(dt)
+            if spinActive and hrp and hrp.Parent then
+                local targetSpeed = spinSpeed * 15
+                local currentSpeed = hrp.RotVelocity.Y
+                local newSpeed = currentSpeed + (targetSpeed - currentSpeed) * 0.3
+                hrp.RotVelocity = Vector3.new(0, newSpeed, 0)
+            end
+        end)
+        ShowNotification("Spin Mode", "Speed: " .. spinSpeed, "success")
+    else
+        if spinConnection then
+            spinConnection:Disconnect()
+            spinConnection = nil
+        end
+        if hrp and hrp.Parent then
+            hrp.RotVelocity = Vector3.new(0, 0, 0)
+        end
+        ShowNotification("Spin Mode", "Deactivated", "warning")
+    end
+end
+
+local function toggleGlitch()
+    glitchActive = not glitchActive
+    
+    if glitchActive then
+        if glitchConnection then glitchConnection:Disconnect() end
+        local lastTime = tick()
+        glitchConnection = RunService.Heartbeat:Connect(function(dt)
+            if glitchActive and hrp and hrp.Parent then
+                local now = tick()
+                local delta = math.min(now - lastTime, 0.033)
+                lastTime = now
+                
+                local intensity = glitchIntensity
+                local smooth = 0.85
+                
+                local targetVel = Vector3.new(
+                    (math.random() * 2 - 1) * intensity * 80,
+                    (math.random() * 2 - 1) * intensity * 50,
+                    (math.random() * 2 - 1) * intensity * 80
+                )
+                local targetRot = Vector3.new(
+                    (math.random() * 2 - 1) * intensity * 30,
+                    (math.random() * 2 - 1) * intensity * 30,
+                    (math.random() * 2 - 1) * intensity * 30
+                )
+                
+                hrp.Velocity = hrp.Velocity:Lerp(targetVel, smooth)
+                hrp.RotVelocity = hrp.RotVelocity:Lerp(targetRot, smooth)
+            end
+        end)
+        ShowNotification("Glitch Mode", "Intensity: " .. string.format("%.1f", glitchIntensity), "success")
+    else
+        if glitchConnection then
+            glitchConnection:Disconnect()
+            glitchConnection = nil
+        end
+        if hrp and hrp.Parent then
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            hrp.RotVelocity = Vector3.new(0, 0, 0)
+        end
+        ShowNotification("Glitch Mode", "Deactivated", "warning")
+    end
+end
+
+-- ==============================================
+-- SPECTATE FUNCTIONS
+-- ==============================================
+
+local spectateWindow = nil
+local spectating = false
+local spectateTarget = nil
+local spectateConnection = nil
+local followActive = false
+local followConnection = nil
+local originalCameraSubject = nil
+local selectedPlayer = nil
+
+local function getTargetHead(targetPlayer)
+    if not targetPlayer then return nil end
+    local targetChar = targetPlayer.Character
+    if not targetChar or not targetChar.Parent then return nil end
+    return targetChar:FindFirstChild("Head")
+end
+
+local function getTargetHRP(targetPlayer)
+    if not targetPlayer then return nil end
+    local targetChar = targetPlayer.Character
+    if not targetChar or not targetChar.Parent then return nil end
+    return targetChar:FindFirstChild("HumanoidRootPart")
+end
+
+local function stopSpectate()
+    if spectating then
+        spectating = false
+        if spectateConnection then
+            spectateConnection:Disconnect()
+            spectateConnection = nil
+        end
+        local ownChar = player.Character
+        if ownChar then
+            local ownHRP = ownChar:FindFirstChild("HumanoidRootPart")
+            if ownHRP then
+                Camera.CameraSubject = ownHRP
+            end
+        end
+        Camera.CameraType = Enum.CameraType.Custom
+        spectateTarget = nil
+    end
+end
+
+local function stopFollow()
+    if followActive then
+        followActive = false
+        if followConnection then
+            followConnection:Disconnect()
+            followConnection = nil
+        end
+    end
+end
+
+local function stopAllSpectate()
+    stopSpectate()
+    stopFollow()
+    ShowNotification("Spectate", "All actions stopped", "warning")
+end
+
+-- SPECTATE JAUH (focus kepala)
+local function startSpectate(targetPlayer)
+    if not targetPlayer then return end
+    
+    stopSpectate()
+    
+    local targetHead = getTargetHead(targetPlayer)
+    if not targetHead then
+        ShowNotification("Error", "Player has no head!", "error")
+        return
+    end
+    
+    spectating = true
+    spectateTarget = targetPlayer
+    
+    local ownChar = player.Character
+    if ownChar then
+        local ownHRP = ownChar:FindFirstChild("HumanoidRootPart")
+        if ownHRP then
+            originalCameraSubject = ownHRP
+        end
+    end
+    
+    Camera.CameraSubject = targetHead
+    Camera.CameraType = Enum.CameraType.Attach
+    
+    spectateConnection = RunService.RenderStepped:Connect(function()
+        if spectating and spectateTarget then
+            local newHead = getTargetHead(spectateTarget)
+            if newHead and newHead.Parent then
+                Camera.CameraSubject = newHead
+            else
+                stopSpectate()
+                ShowNotification("Spectate", "Target lost!", "error")
+            end
+        end
+    end)
+    
+    ShowNotification("Spectate", "Watching: " .. targetPlayer.DisplayName, "success")
+end
+
+-- FOLLOW JAUH (smooth teleport ke kepala player)
+local function startFollow(targetPlayer)
+    if not targetPlayer then return end
+    
+    stopFollow()
+    
+    local targetHRP = getTargetHRP(targetPlayer)
+    if not targetHRP then
+        ShowNotification("Error", "Cannot follow!", "error")
+        return
+    end
+    
+    followActive = true
+    
+    followConnection = RunService.RenderStepped:Connect(function()
+        if followActive and targetPlayer and targetPlayer.Character then
+            local newHRP = getTargetHRP(targetPlayer)
+            if newHRP and newHRP.Parent and hrp and hrp.Parent then
+                local targetPos = newHRP.Position + Vector3.new(0, 2.5, 0)
+                local currentRot = hrp.CFrame - hrp.Position
+                local currentPos = hrp.Position
+                local newPos = currentPos:Lerp(targetPos, 0.4)
+                hrp.CFrame = CFrame.new(newPos) * currentRot
+            else
+                stopFollow()
+                ShowNotification("Follow", "Target lost!", "error")
+            end
+        end
+    end)
+    
+    ShowNotification("Follow", "Following: " .. targetPlayer.DisplayName, "success")
+end
+
+local function teleportToPlayer(targetPlayer)
+    if not targetPlayer then return end
+    
+    local targetHRP = getTargetHRP(targetPlayer)
+    if not targetHRP then
+        ShowNotification("Error", "Cannot teleport!", "error")
+        return
+    end
+    
+    if hrp and hrp.Parent then
+        local targetPos = targetHRP.Position + Vector3.new(0, 3, 0)
+        local currentRot = hrp.CFrame - hrp.Position
+        hrp.CFrame = CFrame.new(targetPos) * currentRot
+        ShowNotification("Teleport", "Teleported to " .. targetPlayer.DisplayName, "success")
+    end
+end
+
+local function refreshPlayerList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            table.insert(list, plr)
+        end
+    end
+    return list
+end
+
+-- ==============================================
+-- CREATE SPECTATE POPUP WINDOW (DENGAN EFFECT + AUTO VIEW)
+-- ==============================================
+local function createSpectatePopup()
+    if spectateWindow then
+        spectateWindow:Destroy()
+        spectateWindow = nil
+        return
+    end
+    
+    local screenGuiMain = player.PlayerGui:FindFirstChild("IYANKINKA_Sky")
+    if not screenGuiMain then return end
+    
+    spectateWindow = Instance.new("Frame")
+    spectateWindow.Size = UDim2.new(0, 250, 0, 320)
+    spectateWindow.Position = UDim2.new(0.5, -125, 0.5, -160)
+    spectateWindow.BackgroundColor3 = Colors.DarkBg
+    spectateWindow.BackgroundTransparency = 0
+    spectateWindow.BorderSizePixel = 0
+    spectateWindow.Active = true
+    spectateWindow.Draggable = true
+    spectateWindow.ClipsDescendants = true
+    spectateWindow.Parent = screenGuiMain
+    spectateWindow.ZIndex = 50
+    
+    Instance.new("UICorner", spectateWindow).CornerRadius = UDim.new(0, 12)
+    
+    -- BACKGROUND GRADIENT UNTUK SPECTATE WINDOW
+    local specBgGradient = Instance.new("UIGradient", spectateWindow)
+    specBgGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, GradientColors.DarkRed),
+        ColorSequenceKeypoint.new(0.3, GradientColors.MidRed),
+        ColorSequenceKeypoint.new(0.6, GradientColors.BrightRed),
+        ColorSequenceKeypoint.new(1, GradientColors.LighterRed)
+    })
+    specBgGradient.Rotation = 0
+    
+    -- STROKE GRADIENT UNTUK SPECTATE WINDOW
+    local specWindowGlow = Instance.new("UIStroke", spectateWindow)
+    specWindowGlow.Thickness = 1.5
+    specWindowGlow.Color = GradientColors.LightestRed
+    specWindowGlow.Transparency = 0.3
+    specWindowGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    
+    local specStrokeGradient = Instance.new("UIGradient", specWindowGlow)
+    specStrokeGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, GradientColors.DarkRed),
+        ColorSequenceKeypoint.new(0.2, GradientColors.BrightRed),
+        ColorSequenceKeypoint.new(0.5, GradientColors.LightestRed),
+        ColorSequenceKeypoint.new(0.8, GradientColors.BrightRed),
+        ColorSequenceKeypoint.new(1, GradientColors.DarkRed)
+    })
+    specStrokeGradient.Rotation = 0
+    
+    -- DOT EFFECT UNTUK SPECTATE WINDOW
+    local specDotContainer = createDotEffect(spectateWindow, specDots)
+    
+    -- ===== TITLE BAR =====
+    local winTitleBar = Instance.new("Frame", spectateWindow)
+    winTitleBar.Size = UDim2.new(1, -10, 0, 34)
+    winTitleBar.Position = UDim2.new(0, 5, 0, 5)
+    winTitleBar.BackgroundColor3 = Colors.DarkerBg
+    winTitleBar.BackgroundTransparency = 0.2
+    winTitleBar.BorderSizePixel = 0
+    Instance.new("UICorner", winTitleBar).CornerRadius = UDim.new(0, 8)
+    
+    -- HAPUS LOGO PADA SPECTATE WINDOW
+    
+    local winTitle = Instance.new("TextLabel", winTitleBar)
+    winTitle.Size = UDim2.new(0.5, 0, 1, 0)
+    winTitle.Position = UDim2.new(0, 32, 0, 0)
+    winTitle.BackgroundTransparency = 1
+    winTitle.Text = "SPECTATOR"
+    winTitle.TextColor3 = Colors.White
+    winTitle.TextSize = 10
+    winTitle.Font = Enum.Font.GothamBlack
+    winTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local winClose = Instance.new("TextButton", winTitleBar)
+    winClose.Size = UDim2.new(0, 20, 0, 20)
+    winClose.Position = UDim2.new(1, -26, 0.5, -10)
+    winClose.BackgroundColor3 = Colors.RedDark
+    winClose.Text = "✕"
+    winClose.TextColor3 = Colors.White
+    winClose.Font = Enum.Font.GothamBold
+    winClose.TextSize = 9
+    winClose.BorderSizePixel = 0
+    Instance.new("UICorner", winClose).CornerRadius = UDim.new(0, 5)
+    
+    winClose.MouseButton1Click:Connect(function()
+        stopAllSpectate()
+        spectateWindow:Destroy()
+        spectateWindow = nil
+    end)
+    
+    -- Divider
+    local winDivider = Instance.new("Frame", spectateWindow)
+    winDivider.Size = UDim2.new(0.84, 0, 0, 1)
+    winDivider.Position = UDim2.new(0.08, 0, 0, 43)
+    winDivider.BackgroundColor3 = Colors.RedGlow
+    winDivider.BackgroundTransparency = 0.4
+    
+    -- Player List
+    local playerListFrame = Instance.new("Frame", spectateWindow)
+    playerListFrame.Size = UDim2.new(1, -10, 0, 130)
+    playerListFrame.Position = UDim2.new(0, 5, 0, 48)
+    playerListFrame.BackgroundColor3 = Colors.CardBg
+    playerListFrame.BackgroundTransparency = 0.2
+    Instance.new("UICorner", playerListFrame).CornerRadius = UDim.new(0, 8)
+    
+    local listTitle = Instance.new("TextLabel", playerListFrame)
+    listTitle.Size = UDim2.new(1, -8, 0, 16)
+    listTitle.Position = UDim2.new(0, 4, 0, 4)
+    listTitle.BackgroundTransparency = 1
+    listTitle.Text = "📡 PLAYER LIST (Click to view)"
+    listTitle.TextColor3 = Colors.GrayLight
+    listTitle.Font = Enum.Font.GothamBold
+    listTitle.TextSize = 7
+    listTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local playerScrollFrame = Instance.new("ScrollingFrame", playerListFrame)
+    playerScrollFrame.Size = UDim2.new(1, -6, 0, 100)
+    playerScrollFrame.Position = UDim2.new(0, 3, 0, 24)
+    playerScrollFrame.BackgroundTransparency = 1
+    playerScrollFrame.ScrollBarThickness = 2
+    playerScrollFrame.ScrollBarImageColor3 = Colors.RedGlow
+    playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    
+    local playerLayout = Instance.new("UIListLayout", playerScrollFrame)
+    playerLayout.Padding = UDim.new(0, 3)
+    playerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    
+    -- BUTTON AREA
+    local buttonFrame = Instance.new("Frame", spectateWindow)
+    buttonFrame.Size = UDim2.new(1, -10, 0, 85)
+    buttonFrame.Position = UDim2.new(0, 5, 0, 185)
+    buttonFrame.BackgroundTransparency = 1
+    
+    local specBtn = Instance.new("TextButton", buttonFrame)
+    specBtn.Size = UDim2.new(0.48, -3, 0, 24)
+    specBtn.Position = UDim2.new(0, 0, 0, 0)
+    specBtn.BackgroundColor3 = Colors.RedDark
+    specBtn.Text = "SPECTATOR ON"
+    specBtn.TextColor3 = Colors.White
+    specBtn.Font = Enum.Font.GothamBold
+    specBtn.TextSize = 7
+    specBtn.BorderSizePixel = 0
+    Instance.new("UICorner", specBtn).CornerRadius = UDim.new(0, 5)
+    
+    local teleBtn = Instance.new("TextButton", buttonFrame)
+    teleBtn.Size = UDim2.new(0.48, -3, 0, 24)
+    teleBtn.Position = UDim2.new(0.52, 0, 0, 0)
+    teleBtn.BackgroundColor3 = Colors.DarkerBg
+    teleBtn.Text = "TELEPORT"
+    teleBtn.TextColor3 = Colors.White
+    teleBtn.Font = Enum.Font.GothamBold
+    teleBtn.TextSize = 7
+    teleBtn.BorderSizePixel = 0
+    Instance.new("UICorner", teleBtn).CornerRadius = UDim.new(0, 5)
+    
+    local followBtn = Instance.new("TextButton", buttonFrame)
+    followBtn.Size = UDim2.new(0.48, -3, 0, 24)
+    followBtn.Position = UDim2.new(0, 0, 0, 28)
+    followBtn.BackgroundColor3 = Colors.DarkerBg
+    followBtn.Text = "FOLLOW ON"
+    followBtn.TextColor3 = Colors.White
+    followBtn.Font = Enum.Font.GothamBold
+    followBtn.TextSize = 7
+    followBtn.BorderSizePixel = 0
+    Instance.new("UICorner", followBtn).CornerRadius = UDim.new(0, 5)
+    
+    local stopBtn = Instance.new("TextButton", buttonFrame)
+    stopBtn.Size = UDim2.new(0.48, -3, 0, 24)
+    stopBtn.Position = UDim2.new(0.52, 0, 0, 28)
+    stopBtn.BackgroundColor3 = Colors.RedDark
+    stopBtn.Text = "STOP ALL"
+    stopBtn.TextColor3 = Colors.White
+    stopBtn.Font = Enum.Font.GothamBold
+    stopBtn.TextSize = 7
+    stopBtn.BorderSizePixel = 0
+    Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 5)
+    
+    local selectedLabel = Instance.new("TextLabel", buttonFrame)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 18)
+    selectedLabel.Position = UDim2.new(0, 0, 0, 56)
+    selectedLabel.BackgroundColor3 = Colors.CardBg
+    selectedLabel.BackgroundTransparency = 0.3
+    selectedLabel.Text = "No player selected"
+    selectedLabel.TextColor3 = Colors.GrayLight
+    selectedLabel.Font = Enum.Font.Gotham
+    selectedLabel.TextSize = 6
+    selectedLabel.BorderSizePixel = 0
+    Instance.new("UICorner", selectedLabel).CornerRadius = UDim.new(0, 4)
+    
+    -- Refresh player list
+    local function refreshPopupPlayerList()
+        for _, child in ipairs(playerScrollFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        local players = refreshPlayerList()
+        
+        if #players == 0 then
+            local emptyLabel = Instance.new("TextLabel", playerScrollFrame)
+            emptyLabel.Size = UDim2.new(1, 0, 0, 25)
+            emptyLabel.BackgroundTransparency = 1
+            emptyLabel.Text = "No other players"
+            emptyLabel.TextColor3 = Colors.GrayDark
+            emptyLabel.Font = Enum.Font.Gotham
+            emptyLabel.TextSize = 7
+            playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 30)
+            return
+        end
+        
+        local yPos = 0
+        for _, plr in ipairs(players) do
+            local playerBtn = Instance.new("TextButton", playerScrollFrame)
+            playerBtn.Size = UDim2.new(1, -8, 0, 24)
+            playerBtn.Position = UDim2.new(0, 4, 0, yPos)
+            playerBtn.BackgroundColor3 = (selectedPlayer == plr) and Colors.RedDark or Colors.DarkerBg
+            playerBtn.BackgroundTransparency = 0.3
+            playerBtn.Text = "👤 " .. plr.DisplayName .. "\n@" .. plr.Name
+            playerBtn.TextColor3 = Colors.White
+            playerBtn.Font = Enum.Font.Gotham
+            playerBtn.TextSize = 6
+            playerBtn.TextXAlignment = Enum.TextXAlignment.Left
+            playerBtn.TextTruncate = Enum.TextTruncate.AtEnd
+            playerBtn.BorderSizePixel = 0
+            Instance.new("UICorner", playerBtn).CornerRadius = UDim.new(0, 4)
+            
+            -- AUTO VIEW: bila tekan nama player, terus spectate
+            playerBtn.MouseButton1Click:Connect(function()
+                selectedPlayer = plr
+                selectedLabel.Text = "✓ " .. plr.DisplayName
+                
+                -- Update background semua button
+                for _, child in ipairs(playerScrollFrame:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        local name = child.Text:match("@(.+)") or ""
+                        if name == plr.Name then
+                            child.BackgroundColor3 = Colors.RedDark
+                        else
+                            child.BackgroundColor3 = Colors.DarkerBg
+                        end
+                    end
+                end
+                
+                -- AUTO VIEW: terus start spectate
+                startSpectate(plr)
+                ShowNotification("Auto View", "Now watching: " .. plr.DisplayName, "success")
+            end)
+            
+            yPos = yPos + 27
+        end
+        
+        playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, yPos + 10)
+    end
+    
+    -- Button actions
+    specBtn.MouseButton1Click:Connect(function()
+        if not selectedPlayer then
+            ShowNotification("Error", "Select a player first!", "error")
+            return
+        end
+        startSpectate(selectedPlayer)
+    end)
+    
+    teleBtn.MouseButton1Click:Connect(function()
+        if not selectedPlayer then
+            ShowNotification("Error", "Select a player first!", "error")
+            return
+        end
+        teleportToPlayer(selectedPlayer)
+    end)
+    
+    followBtn.MouseButton1Click:Connect(function()
+        if not selectedPlayer then
+            ShowNotification("Error", "Select a player first!", "error")
+            return
+        end
+        if followActive then
+            stopFollow()
+            followBtn.Text = "FOLLOW ON"
+            followBtn.BackgroundColor3 = Colors.DarkerBg
+        else
+            startFollow(selectedPlayer)
+            followBtn.Text = "FOLLOW OFF"
+            followBtn.BackgroundColor3 = Colors.RedDark
+        end
+    end)
+    
+    stopBtn.MouseButton1Click:Connect(function()
+        stopAllSpectate()
+        followBtn.Text = "FOLLOW ON"
+        followBtn.BackgroundColor3 = Colors.DarkerBg
+    end)
+    
+    -- Events
+    Players.PlayerAdded:Connect(refreshPopupPlayerList)
+    Players.PlayerRemoving:Connect(function()
+        if selectedPlayer and not selectedPlayer.Parent then
+            selectedPlayer = nil
+            selectedLabel.Text = "No player selected"
+        end
+        refreshPopupPlayerList()
+    end)
+    
+    refreshPopupPlayerList()
+    
+    -- Gradient rotation loop untuk spectate window
+    task.spawn(function()
+        while spectateWindow and spectateWindow.Parent do
+            task.wait(0.05)
+            if specBgGradient then
+                specBgGradient.Rotation = (specBgGradient.Rotation + 3) % 360
+            end
+            if specStrokeGradient then
+                specStrokeGradient.Rotation = (specStrokeGradient.Rotation + 4) % 360
+            end
+        end
+    end)
+end
+
+-- ==============================================
+-- CREATE MAIN UI (DENGAN BACKGROUND EFFECT)
+-- ==============================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "IYANKINKA_Sky"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 280, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -210)
+mainFrame.BackgroundColor3 = Colors.DarkBg
+mainFrame.BackgroundTransparency = 0
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
+
+-- BACKGROUND GRADIENT (BERPUTAR)
+local bgGradient = Instance.new("UIGradient", mainFrame)
+bgGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, GradientColors.DarkRed),
+    ColorSequenceKeypoint.new(0.3, GradientColors.MidRed),
+    ColorSequenceKeypoint.new(0.6, GradientColors.BrightRed),
+    ColorSequenceKeypoint.new(1, GradientColors.LighterRed)
+})
+bgGradient.Rotation = 0
+
+-- STROKE GRADIENT (BERPUTAR)
+local outerGlow = Instance.new("UIStroke", mainFrame)
+outerGlow.Thickness = 1.5
+outerGlow.Color = GradientColors.LightestRed
+outerGlow.Transparency = 0.3
+outerGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local strokeGradient = Instance.new("UIGradient", outerGlow)
+strokeGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, GradientColors.DarkRed),
+    ColorSequenceKeypoint.new(0.2, GradientColors.BrightRed),
+    ColorSequenceKeypoint.new(0.5, GradientColors.LightestRed),
+    ColorSequenceKeypoint.new(0.8, GradientColors.BrightRed),
+    ColorSequenceKeypoint.new(1, GradientColors.DarkRed)
+})
+strokeGradient.Rotation = 0
+
+-- INNER GLOW
+local innerGlow = Instance.new("UIStroke", mainFrame)
+innerGlow.Thickness = 0.8
+innerGlow.Color = Colors.RedBright
+innerGlow.Transparency = 0.5
+
+-- DOT EFFECT
+local dotContainer = createDotEffect(mainFrame, mainDots)
+
+-- TITLE BAR
+local titleBar = Instance.new("Frame", mainFrame)
+titleBar.Size = UDim2.new(1, -14, 0, 40)
+titleBar.Position = UDim2.new(0, 7, 0, 5)
+titleBar.BackgroundColor3 = Colors.DarkerBg
+titleBar.BackgroundTransparency = 0.2
+titleBar.BorderSizePixel = 0
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+-- HAPUS LOGO PADA MAIN UI (ImageLabel tidak dibuat)
+
+local title = Instance.new("TextLabel", titleBar)
+title.Size = UDim2.new(0.5, 0, 0.5, 0)
+title.Position = UDim2.new(0, 12, 0, 5)
+title.BackgroundTransparency = 1
+title.Text = "IYANKINKA LASER PIW"
+title.TextColor3 = Colors.White
+title.TextSize = 12
+title.Font = Enum.Font.GothamBlack
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local subtitle = Instance.new("TextLabel", titleBar)
+subtitle.Size = UDim2.new(0.5, 0, 0.3, 0)
+subtitle.Position = UDim2.new(0, 12, 0, 21)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "By IYANKINKA"
+subtitle.TextColor3 = Colors.GrayDark
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 7
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local minBtn = Instance.new("TextButton", titleBar)
+minBtn.Size = UDim2.new(0, 22, 0, 22)
+minBtn.Position = UDim2.new(1, -44, 0.5, -11)
+minBtn.BackgroundColor3 = Colors.DarkerBg
+minBtn.BorderSizePixel = 0
+minBtn.TextColor3 = Colors.GrayLight
+minBtn.Text = "−"
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+local closeBtn = Instance.new("TextButton", titleBar)
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -22, 0.5, -11)
+closeBtn.BackgroundColor3 = Colors.RedDark
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Colors.White
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 11
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+closeBtn.MouseButton1Click:Connect(function()
+    if spectateWindow then spectateWindow:Destroy() end
+    screenGui:Destroy()
+end)
+
+local divider = Instance.new("Frame", mainFrame)
+divider.Size = UDim2.new(0.86, 0, 0, 1)
+divider.Position = UDim2.new(0.07, 0, 0, 49)
+divider.BackgroundColor3 = Colors.RedGlow
+divider.BackgroundTransparency = 0.4
+
+-- SCROLL CONTENT
+local scrollFrame = Instance.new("ScrollingFrame", mainFrame)
+scrollFrame.Size = UDim2.new(1, -14, 1, -58)
+scrollFrame.Position = UDim2.new(0, 7, 0, 54)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 3
+scrollFrame.ScrollBarImageColor3 = Colors.RedGlow
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+local scrollLayout = Instance.new("UIListLayout", scrollFrame)
+scrollLayout.Padding = UDim.new(0, 6)
+scrollLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+scrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollLayout.AbsoluteContentSize.Y + 12)
+end)
+
+-- BIG JACKET CARD
+local jacketCard = Instance.new("Frame", scrollFrame)
+jacketCard.Size = UDim2.new(0.94, 0, 0, 55)
+jacketCard.BackgroundColor3 = Colors.CardBg
+jacketCard.BackgroundTransparency = 0.2
+jacketCard.BorderSizePixel = 0
+Instance.new("UICorner", jacketCard).CornerRadius = UDim.new(0, 9)
+local jacketStroke = Instance.new("UIStroke", jacketCard)
+jacketStroke.Thickness = 1
+jacketStroke.Color = Colors.RedGlow
+jacketStroke.Transparency = 0.4
+
+local jacketIcon = Instance.new("TextLabel", jacketCard)
+jacketIcon.Size = UDim2.new(0, 28, 1, 0)
+jacketIcon.Position = UDim2.new(0, 8, 0, 0)
+jacketIcon.BackgroundTransparency = 1
+jacketIcon.Text = "🧥"
+jacketIcon.TextColor3 = Colors.GrayLight
+jacketIcon.TextSize = 16
+jacketIcon.Font = Enum.Font.GothamBold
+
+local jacketTitle = Instance.new("TextLabel", jacketCard)
+jacketTitle.Size = UDim2.new(0.5, 0, 0.5, 0)
+jacketTitle.Position = UDim2.new(0, 40, 0, 7)
+jacketTitle.BackgroundTransparency = 1
+jacketTitle.Text = "LASER MAP"
+jacketTitle.TextColor3 = Colors.White
+jacketTitle.Font = Enum.Font.GothamBold
+jacketTitle.TextSize = 11
+jacketTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local jacketDesc = Instance.new("TextLabel", jacketCard)
+jacketDesc.Size = UDim2.new(0.5, 0, 0.3, 0)
+jacketDesc.Position = UDim2.new(0, 40, 0, 24)
+jacketDesc.BackgroundTransparency = 1
+jacketDesc.Text = "big jacket"
+jacketDesc.TextColor3 = Colors.GrayDark
+jacketDesc.Font = Enum.Font.Gotham
+jacketDesc.TextSize = 7
+jacketDesc.TextXAlignment = Enum.TextXAlignment.Left
+
+local jacketStatus = Instance.new("TextLabel", jacketCard)
+jacketStatus.Size = UDim2.new(0.25, 0, 0, 10)
+jacketStatus.Position = UDim2.new(1, -48, 0.5, 12)
+jacketStatus.BackgroundTransparency = 1
+jacketStatus.Text = ""
+jacketStatus.TextColor3 = Colors.RedBright
+jacketStatus.Font = Enum.Font.Gotham
+jacketStatus.TextSize = 7
+
+local jacketBtn = Instance.new("TextButton", jacketCard)
+jacketBtn.Size = UDim2.new(0, 46, 0, 26)
+jacketBtn.Position = UDim2.new(1, -50, 0.5, -13)
+jacketBtn.BackgroundColor3 = Colors.RedDark
+jacketBtn.Text = "OFF"
+jacketBtn.TextColor3 = Colors.GrayLight
+jacketBtn.Font = Enum.Font.GothamBold
+jacketBtn.TextSize = 9
+jacketBtn.BorderSizePixel = 0
+Instance.new("UICorner", jacketBtn).CornerRadius = UDim.new(0, 6)
+
+-- SPIN CARD
+local spinCard = Instance.new("Frame", scrollFrame)
+spinCard.Size = UDim2.new(0.94, 0, 0, 80)
+spinCard.BackgroundColor3 = Colors.CardBg
+spinCard.BackgroundTransparency = 0.2
+spinCard.BorderSizePixel = 0
+Instance.new("UICorner", spinCard).CornerRadius = UDim.new(0, 9)
+local spinStroke = Instance.new("UIStroke", spinCard)
+spinStroke.Thickness = 1
+spinStroke.Color = Colors.RedGlow
+spinStroke.Transparency = 0.4
+
+local spinIcon = Instance.new("TextLabel", spinCard)
+spinIcon.Size = UDim2.new(0, 28, 1, 0)
+spinIcon.Position = UDim2.new(0, 8, 0, 0)
+spinIcon.BackgroundTransparency = 1
+spinIcon.Text = "🌀"
+spinIcon.TextColor3 = Colors.GrayLight
+spinIcon.TextSize = 16
+spinIcon.Font = Enum.Font.GothamBold
+
+local spinTitle = Instance.new("TextLabel", spinCard)
+spinTitle.Size = UDim2.new(0.5, 0, 0.5, 0)
+spinTitle.Position = UDim2.new(0, 40, 0, 7)
+spinTitle.BackgroundTransparency = 1
+spinTitle.Text = "Spin Mode"
+spinTitle.TextColor3 = Colors.White
+spinTitle.Font = Enum.Font.GothamBold
+spinTitle.TextSize = 11
+spinTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local spinDesc = Instance.new("TextLabel", spinCard)
+spinDesc.Size = UDim2.new(0.5, 0, 0.3, 0)
+spinDesc.Position = UDim2.new(0, 40, 0, 24)
+spinDesc.BackgroundTransparency = 1
+spinDesc.Text = "rotate (max 60)"
+spinDesc.TextColor3 = Colors.GrayDark
+spinDesc.Font = Enum.Font.Gotham
+spinDesc.TextSize = 7
+spinDesc.TextXAlignment = Enum.TextXAlignment.Left
+
+local spinStatus = Instance.new("TextLabel", spinCard)
+spinStatus.Size = UDim2.new(0.25, 0, 0, 10)
+spinStatus.Position = UDim2.new(1, -48, 0.5, 12)
+spinStatus.BackgroundTransparency = 1
+spinStatus.Text = ""
+spinStatus.TextColor3 = Colors.RedBright
+spinStatus.Font = Enum.Font.Gotham
+spinStatus.TextSize = 7
+
+local spinBtn = Instance.new("TextButton", spinCard)
+spinBtn.Size = UDim2.new(0, 46, 0, 26)
+spinBtn.Position = UDim2.new(1, -50, 0.5, -13)
+spinBtn.BackgroundColor3 = Colors.RedDark
+spinBtn.Text = "OFF"
+spinBtn.TextColor3 = Colors.GrayLight
+spinBtn.Font = Enum.Font.GothamBold
+spinBtn.TextSize = 9
+spinBtn.BorderSizePixel = 0
+Instance.new("UICorner", spinBtn).CornerRadius = UDim.new(0, 6)
+
+local spinSpeedLabel = Instance.new("TextLabel", spinCard)
+spinSpeedLabel.Size = UDim2.new(0.35, 0, 0, 14)
+spinSpeedLabel.Position = UDim2.new(0, 40, 0, 48)
+spinSpeedLabel.BackgroundTransparency = 1
+spinSpeedLabel.Text = "Speed: 10"
+spinSpeedLabel.TextColor3 = Colors.GrayLight
+spinSpeedLabel.Font = Enum.Font.GothamBold
+spinSpeedLabel.TextSize = 8
+spinSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local spinDown = Instance.new("TextButton", spinCard)
+spinDown.Size = UDim2.new(0, 22, 0, 18)
+spinDown.Position = UDim2.new(0.68, -5, 0, 48)
+spinDown.BackgroundColor3 = Colors.RedDark
+spinDown.Text = "-"
+spinDown.TextColor3 = Colors.White
+spinDown.Font = Enum.Font.GothamBold
+spinDown.TextSize = 13
+spinDown.BorderSizePixel = 0
+Instance.new("UICorner", spinDown).CornerRadius = UDim.new(0, 5)
+
+local spinUp = Instance.new("TextButton", spinCard)
+spinUp.Size = UDim2.new(0, 22, 0, 18)
+spinUp.Position = UDim2.new(0.8, -5, 0, 48)
+spinUp.BackgroundColor3 = Colors.RedDark
+spinUp.Text = "+"
+spinUp.TextColor3 = Colors.White
+spinUp.Font = Enum.Font.GothamBold
+spinUp.TextSize = 13
+spinUp.BorderSizePixel = 0
+Instance.new("UICorner", spinUp).CornerRadius = UDim.new(0, 5)
+
+-- GLITCH CARD + SPECTATE BUTTON
+local glitchCard = Instance.new("Frame", scrollFrame)
+glitchCard.Size = UDim2.new(0.94, 0, 0, 100)
+glitchCard.BackgroundColor3 = Colors.CardBg
+glitchCard.BackgroundTransparency = 0.2
+glitchCard.BorderSizePixel = 0
+Instance.new("UICorner", glitchCard).CornerRadius = UDim.new(0, 9)
+local glitchStroke = Instance.new("UIStroke", glitchCard)
+glitchStroke.Thickness = 1
+glitchStroke.Color = Colors.RedGlow
+glitchStroke.Transparency = 0.4
+
+local glitchIcon = Instance.new("TextLabel", glitchCard)
+glitchIcon.Size = UDim2.new(0, 28, 1, 0)
+glitchIcon.Position = UDim2.new(0, 8, 0, 0)
+glitchIcon.BackgroundTransparency = 1
+glitchIcon.Text = "⚡"
+glitchIcon.TextColor3 = Colors.GrayLight
+glitchIcon.TextSize = 16
+glitchIcon.Font = Enum.Font.GothamBold
+
+local glitchTitle = Instance.new("TextLabel", glitchCard)
+glitchTitle.Size = UDim2.new(0.5, 0, 0.5, 0)
+glitchTitle.Position = UDim2.new(0, 40, 0, 7)
+glitchTitle.BackgroundTransparency = 1
+glitchTitle.Text = "Glitch Mode"
+glitchTitle.TextColor3 = Colors.White
+glitchTitle.Font = Enum.Font.GothamBold
+glitchTitle.TextSize = 11
+glitchTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local glitchDesc = Instance.new("TextLabel", glitchCard)
+glitchDesc.Size = UDim2.new(0.5, 0, 0.3, 0)
+glitchDesc.Position = UDim2.new(0, 40, 0, 24)
+glitchDesc.BackgroundTransparency = 1
+glitchDesc.Text = "chaotic (max 6.0)"
+glitchDesc.TextColor3 = Colors.GrayDark
+glitchDesc.Font = Enum.Font.Gotham
+glitchDesc.TextSize = 7
+glitchDesc.TextXAlignment = Enum.TextXAlignment.Left
+
+local glitchStatus = Instance.new("TextLabel", glitchCard)
+glitchStatus.Size = UDim2.new(0.25, 0, 0, 10)
+glitchStatus.Position = UDim2.new(1, -48, 0.5, 12)
+glitchStatus.BackgroundTransparency = 1
+glitchStatus.Text = ""
+glitchStatus.TextColor3 = Colors.RedBright
+glitchStatus.Font = Enum.Font.Gotham
+glitchStatus.TextSize = 7
+
+local glitchBtn = Instance.new("TextButton", glitchCard)
+glitchBtn.Size = UDim2.new(0, 46, 0, 26)
+glitchBtn.Position = UDim2.new(1, -50, 0.5, -13)
+glitchBtn.BackgroundColor3 = Colors.RedDark
+glitchBtn.Text = "OFF"
+glitchBtn.TextColor3 = Colors.GrayLight
+glitchBtn.Font = Enum.Font.GothamBold
+glitchBtn.TextSize = 9
+glitchBtn.BorderSizePixel = 0
+Instance.new("UICorner", glitchBtn).CornerRadius = UDim.new(0, 6)
+
+local glitchIntensityLabel = Instance.new("TextLabel", glitchCard)
+glitchIntensityLabel.Size = UDim2.new(0.35, 0, 0, 14)
+glitchIntensityLabel.Position = UDim2.new(0, 40, 0, 48)
+glitchIntensityLabel.BackgroundTransparency = 1
+glitchIntensityLabel.Text = "Intensity: 1.0"
+glitchIntensityLabel.TextColor3 = Colors.GrayLight
+glitchIntensityLabel.Font = Enum.Font.GothamBold
+glitchIntensityLabel.TextSize = 8
+glitchIntensityLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local glitchDown = Instance.new("TextButton", glitchCard)
+glitchDown.Size = UDim2.new(0, 22, 0, 18)
+glitchDown.Position = UDim2.new(0.68, -5, 0, 48)
+glitchDown.BackgroundColor3 = Colors.RedDark
+glitchDown.Text = "-"
+glitchDown.TextColor3 = Colors.White
+glitchDown.Font = Enum.Font.GothamBold
+glitchDown.TextSize = 13
+glitchDown.BorderSizePixel = 0
+Instance.new("UICorner", glitchDown).CornerRadius = UDim.new(0, 5)
+
+local glitchUp = Instance.new("TextButton", glitchCard)
+glitchUp.Size = UDim2.new(0, 22, 0, 18)
+glitchUp.Position = UDim2.new(0.8, -5, 0, 48)
+glitchUp.BackgroundColor3 = Colors.RedDark
+glitchUp.Text = "+"
+glitchUp.TextColor3 = Colors.White
+glitchUp.Font = Enum.Font.GothamBold
+glitchUp.TextSize = 13
+glitchUp.BorderSizePixel = 0
+Instance.new("UICorner", glitchUp).CornerRadius = UDim.new(0, 5)
+
+-- SPECTATE BUTTON
+local spectatePopupBtn = Instance.new("TextButton", glitchCard)
+spectatePopupBtn.Size = UDim2.new(0.88, 0, 0, 26)
+spectatePopupBtn.Position = UDim2.new(0.06, 0, 0, 72)
+spectatePopupBtn.BackgroundColor3 = Colors.RedDark
+spectatePopupBtn.Text = "👁️ SPECTATE PLAYER"
+spectatePopupBtn.TextColor3 = Colors.White
+spectatePopupBtn.Font = Enum.Font.GothamBold
+spectatePopupBtn.TextSize = 9
+spectatePopupBtn.BorderSizePixel = 0
+Instance.new("UICorner", spectatePopupBtn).CornerRadius = UDim.new(0, 7)
+
+spectatePopupBtn.MouseButton1Click:Connect(function()
+    createSpectatePopup()
+end)
+
+-- INFO CARD
+local infoCard = Instance.new("Frame", scrollFrame)
+infoCard.Size = UDim2.new(0.94, 0, 0, 42)
+infoCard.BackgroundColor3 = Colors.CardBg
+infoCard.BackgroundTransparency = 0.2
+infoCard.BorderSizePixel = 0
+Instance.new("UICorner", infoCard).CornerRadius = UDim.new(0, 9)
+local infoStroke = Instance.new("UIStroke", infoCard)
+infoStroke.Thickness = 1
+infoStroke.Color = Colors.RedGlow
+infoStroke.Transparency = 0.4
+
+local infoText = Instance.new("TextLabel", infoCard)
+infoText.Size = UDim2.new(1, -12, 1, 0)
+infoText.Position = UDim2.new(0, 6, 0, 0)
+infoText.BackgroundTransparency = 1
+infoText.Text = "⚡ IYANKINKA LASER MAP PIW PIW"
+infoText.TextColor3 = Colors.GrayDark
+infoText.Font = Enum.Font.Gotham
+infoText.TextSize = 7
+infoText.TextWrapped = true
+
+-- BUTTON CLICKS
+jacketBtn.MouseButton1Click:Connect(function()
+    toggleJacket()
+    jacketBtn.Text = jacketActive and "ON" or "OFF"
+    jacketBtn.BackgroundColor3 = jacketActive and Colors.RedBright or Colors.RedDark
+    jacketBtn.TextColor3 = jacketActive and Colors.White or Colors.GrayLight
+    jacketStatus.Text = jacketActive and "●" or ""
+end)
+
+spinBtn.MouseButton1Click:Connect(function()
+    toggleSpin()
+    spinBtn.Text = spinActive and "ON" or "OFF"
+    spinBtn.BackgroundColor3 = spinActive and Colors.RedBright or Colors.RedDark
+    spinBtn.TextColor3 = spinActive and Colors.White or Colors.GrayLight
+    spinStatus.Text = spinActive and "●" or ""
+end)
+
+glitchBtn.MouseButton1Click:Connect(function()
+    toggleGlitch()
+    glitchBtn.Text = glitchActive and "ON" or "OFF"
+    glitchBtn.BackgroundColor3 = glitchActive and Colors.RedBright or Colors.RedDark
+    glitchBtn.TextColor3 = glitchActive and Colors.White or Colors.GrayLight
+    glitchStatus.Text = glitchActive and "●" or ""
+end)
+
+spinDown.MouseButton1Click:Connect(function()
+    spinSpeed = math.max(1, spinSpeed - 1)
+    spinSpeedLabel.Text = "Speed: " .. spinSpeed
+    if spinActive then ShowNotification("Spin Speed", "Set to " .. spinSpeed, "success") end
+end)
+
+spinUp.MouseButton1Click:Connect(function()
+    spinSpeed = math.min(60, spinSpeed + 1)
+    spinSpeedLabel.Text = "Speed: " .. spinSpeed
+    if spinActive then ShowNotification("Spin Speed", "Set to " .. spinSpeed, "success") end
+end)
+
+glitchDown.MouseButton1Click:Connect(function()
+    glitchIntensity = math.max(0.5, glitchIntensity - 0.1)
+    glitchIntensityLabel.Text = string.format("Intensity: %.1f", glitchIntensity)
+    if glitchActive then ShowNotification("Glitch Intensity", string.format("Set to %.1f", glitchIntensity), "success") end
+end)
+
+glitchUp.MouseButton1Click:Connect(function()
+    glitchIntensity = math.min(6.0, glitchIntensity + 0.1)
+    glitchIntensityLabel.Text = string.format("Intensity: %.1f", glitchIntensity)
+    if glitchActive then ShowNotification("Glitch Intensity", string.format("Set to %.1f", glitchIntensity), "success") end
+end)
+
+-- MINIMIZE
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 280, 0, 48)}):Play()
+        scrollFrame.Visible = false
+        divider.Visible = false
+        minBtn.Text = "+"
+    else
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 280, 0, 420)}):Play()
+        scrollFrame.Visible = true
+        divider.Visible = true
+        minBtn.Text = "−"
+    end
+end)
+
+-- DRAG
+local dragging = false
+local dragStart, startPos
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+mainFrame.InputEnded:Connect(function() dragging = false end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- INSERT TOGGLE
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        screenGui.Enabled = not screenGui.Enabled
+        if spectateWindow then spectateWindow.Enabled = screenGui.Enabled end
+    end
+end)
+
+-- RESPAWN
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.5)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    hrp = newChar:WaitForChild("HumanoidRootPart")
+    if jacketActive and humanoid then
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://70883871260184"
+        local success, track = pcall(function() return humanoid:LoadAnimation(anim) end)
+        if success then
+            jacketAnimTrack = track
+            jacketAnimTrack.Looped = true
+            jacketAnimTrack:Play()
+        end
+    end
+end)
+
+-- ==============================================
+-- RENDER LOOP UNTUK EFFECT (GRADIENT + DOTS)
+-- ==============================================
+local lastUpdate = tick()
+
+RunService.Heartbeat:Connect(function(dt)
+    local now = tick()
+    local delta = math.min(now - lastUpdate, 0.033)
+    lastUpdate = now
+    
+    -- Rotate main background gradient
+    if bgGradient then
+        bgGradient.Rotation = (bgGradient.Rotation + 60 * dt) % 360
+    end
+    
+    -- Rotate main stroke gradient
+    if strokeGradient then
+        strokeGradient.Rotation = (strokeGradient.Rotation + 80 * dt) % 360
+    end
+    
+    -- Update main dots
+    updateDots(mainDots, dt)
+end)
+
+-- WELCOME
+task.spawn(function()
+    task.wait(0.5)
+    ShowNotification("IYANKINKA LASER PIW", "Click player name to auto view", "success")
+end)
+
+print("======================================")
+print("🔥 IYANKINKA LASER PIW - FULL VERSION")
+print("======================================")
+print("✅ Background effect (gradient + dots) on MAIN UI")
+print("✅ Background effect (gradient + dots) on SPECTATE UI")
+print("✅ Click player name → AUTO VIEW")
+print("🌀 Spin Mode - Max 60")
+print("⚡ Glitch Mode - Max 6.0")
+print("📌 Press INSERT to hide/show")
+print("======================================")
