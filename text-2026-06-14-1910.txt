@@ -1,0 +1,329 @@
+﻿local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local flying = false
+local speed = 50
+local speedMultiplier = 3
+
+-- VARIABEL NO CLIP
+local noclipConnection = nil
+local noclipEnabled = false
+
+local character, humanoid, currentRoot
+local attachment, lv, ao
+
+local guiParent = gethui and gethui() or game:GetService("CoreGui")
+
+pcall(function()
+	local old = guiParent:FindFirstChild("SimpleFlyUI")
+	if old then old:Destroy() end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SimpleFlyUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999999999 
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling 
+ScreenGui.Parent = guiParent
+
+-- MAIN FRAME
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = ScreenGui
+MainFrame.Size = UDim2.fromOffset(220, 140)
+MainFrame.Position = UDim2.new(0.5,-110,0.18,0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10,10,14)
+MainFrame.BackgroundTransparency = 0.15
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.ClipsDescendants = true
+MainFrame.ZIndex = 1
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Thickness = 2
+MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+MainStroke.Color = Color3.fromRGB(0,200,180)
+MainStroke.Transparency = 0.25
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0,10,0,6)
+Title.Size = UDim2.new(1,-50,0,22)
+Title.Font = Enum.Font.FredokaOne
+Title.Text = "FLY IYANKINKA"
+Title.TextSize = 16
+Title.TextColor3 = Color3.new(1,1,1)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 2
+
+local UIGradient = Instance.new("UIGradient", Title)
+UIGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 200)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 150, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 200))
+})
+
+local HideButton = Instance.new("TextButton", MainFrame)
+HideButton.Size = UDim2.fromOffset(24, 24)
+HideButton.Position = UDim2.new(1,-32,0,8)
+HideButton.BackgroundTransparency = 1
+HideButton.Text = "−"
+HideButton.TextColor3 = Color3.new(1,1,1)
+HideButton.TextSize = 16
+HideButton.Font = Enum.Font.GothamBold
+HideButton.ZIndex = 3
+
+local Toggle = Instance.new("TextButton", MainFrame)
+Toggle.Size = UDim2.new(0.86,0,0,36)
+Toggle.Position = UDim2.new(0.07,0,0,42)
+Toggle.Text = "Fly: OFF"
+Toggle.Font = Enum.Font.GothamBold
+Toggle.TextSize = 14
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.BackgroundColor3 = Color3.fromRGB(20,20,25)
+Toggle.AutoButtonColor = false
+Toggle.ZIndex = 2
+Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 10)
+
+local ToggleStroke = Instance.new("UIStroke", Toggle)
+ToggleStroke.Thickness = 1.5
+ToggleStroke.Color = Color3.fromRGB(0, 255, 200)
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local SpeedBox = Instance.new("TextBox", MainFrame)
+SpeedBox.Size = UDim2.new(0.86,0,0,30)
+SpeedBox.Position = UDim2.new(0.07,0,0,86)
+SpeedBox.Text = tostring(speed)
+SpeedBox.PlaceholderText = "Speed"
+SpeedBox.Font = Enum.Font.GothamBold
+SpeedBox.TextSize = 13
+SpeedBox.TextColor3 = Color3.new(1,1,1)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(20,20,25)
+SpeedBox.ZIndex = 2
+Instance.new("UICorner", SpeedBox).CornerRadius = UDim.new(0, 10)
+
+local SpeedStroke = Instance.new("UIStroke", SpeedBox)
+SpeedStroke.Thickness = 1
+SpeedStroke.Color = Color3.fromRGB(100,100,100)
+SpeedStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- MINI BUTTON
+local Mini = Instance.new("ImageButton", ScreenGui)
+Mini.Visible = false
+Mini.Active = true
+Mini.Size = UDim2.fromOffset(40,40)
+Mini.Position = UDim2.new(0.5,-20,0.05,0)
+Mini.BackgroundColor3 = Color3.fromRGB(10,10,14)
+Mini.Image = "rbxassetid://603109463"
+Mini.ImageRectOffset = Vector2.new(0, 0)
+Mini.ImageRectSize = Vector2.new(0, 0)
+Mini.ImageColor3 = Color3.fromRGB(255, 100, 50)
+Mini.ZIndex = 10
+Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
+
+local MiniStroke = Instance.new("UIStroke", Mini)
+MiniStroke.Color = Color3.fromRGB(255, 80, 50)
+MiniStroke.Thickness = 1.5
+
+-- ==================== FUNGSI NO CLIP ====================
+local function enableNoclip()
+	if noclipConnection then return end
+	
+	-- Matikan collision untuk semua bagian karakter
+	noclipConnection = RunService.Stepped:Connect(function()
+		if not flying then return end
+		
+		local char = player.Character
+		if char then
+			for _, part in pairs(char:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.CanCollide = false
+				end
+			end
+		end
+	end)
+	
+	noclipEnabled = true
+end
+
+local function disableNoclip()
+	if noclipConnection then
+		noclipConnection:Disconnect()
+		noclipConnection = nil
+	end
+	
+	-- Kembalikan collision (opsional)
+	local char = player.Character
+	if char then
+		for _, part in pairs(char:GetDescendants()) do
+			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+				part.CanCollide = true
+			end
+		end
+	end
+	
+	noclipEnabled = false
+end
+
+-- Update noclip berdasarkan status fly
+local function updateNoclip()
+	if flying then
+		enableNoclip()
+	else
+		disableNoclip()
+	end
+end
+
+-- ==================== DRAG FUNCTION ====================
+local function setupDrag(gui)
+	local dragging, dragStart, startPos
+	gui.InputBegan:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			dragging = true
+			dragStart = input.Position
+			startPos = gui.Position
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			local cam = workspace.CurrentCamera
+			local screenSize = cam.ViewportSize
+			local newX = startPos.X.Offset + delta.X
+			local newY = startPos.Y.Offset + delta.Y
+			newX = math.clamp(newX, 0, screenSize.X - gui.AbsoluteSize.X)
+			newY = math.clamp(newY, 0, screenSize.Y - gui.AbsoluteSize.Y)
+			gui.Position = UDim2.new(0, newX, 0, newY)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			dragging = false
+		end
+	end)
+end
+
+setupDrag(MainFrame)
+setupDrag(Mini)
+
+-- ==================== MINIMIZE / MAXIMIZE ====================
+HideButton.MouseButton1Click:Connect(function()
+	local tween = TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.fromOffset(0, 0)})
+	tween:Play()
+	tween.Completed:Wait()
+	MainFrame.Visible = false
+	Mini.Visible = true
+	Mini.Position = UDim2.new(0, MainFrame.AbsolutePosition.X, 0, MainFrame.AbsolutePosition.Y)
+	Mini.Size = UDim2.fromOffset(0, 0)
+	TweenService:Create(Mini, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(40, 40)}):Play()
+end)
+
+Mini.MouseButton1Click:Connect(function()
+	local tweenMini = TweenService:Create(Mini, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.fromOffset(0, 0)})
+	tweenMini:Play()
+	tweenMini.Completed:Wait()
+	Mini.Visible = false
+	MainFrame.Visible = true
+	MainFrame.Position = UDim2.new(0, Mini.AbsolutePosition.X, 0, Mini.AbsolutePosition.Y)
+	MainFrame.Size = UDim2.fromOffset(0, 0)
+	TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(220, 140)}):Play()
+end)
+
+-- ==================== FLY FUNCTIONS ====================
+local function stopFly()
+	flying = false
+	if humanoid then humanoid.PlatformStand = false end
+	if attachment then attachment:Destroy() end
+	attachment, lv, ao, currentRoot = nil, nil, nil, nil
+	Toggle.Text = "Fly: OFF"
+	
+	-- Matikan noclip saat fly mati
+	disableNoclip()
+end
+
+local function startFly()
+	character = player.Character or player.CharacterAdded:Wait()
+	humanoid = character:FindFirstChildOfClass("Humanoid")
+	
+	if humanoid and humanoid.SeatPart then
+		currentRoot = humanoid.SeatPart
+	else
+		currentRoot = character:FindFirstChild("HumanoidRootPart")
+	end
+
+	if not currentRoot then return end
+	if attachment then attachment:Destroy() end
+	
+	attachment = Instance.new("Attachment", currentRoot)
+	lv = Instance.new("LinearVelocity", currentRoot)
+	lv.Attachment0 = attachment
+	lv.MaxForce = math.huge
+	lv.VectorVelocity = Vector3.zero
+	ao = Instance.new("AlignOrientation", currentRoot)
+	ao.Attachment0 = attachment
+	ao.MaxTorque = math.huge
+	ao.Responsiveness = 200
+	ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	flying = true
+	Toggle.Text = "Fly: ON"
+	
+	-- Aktifkan noclip saat fly aktif
+	enableNoclip()
+end
+
+Toggle.MouseButton1Click:Connect(function()
+	if flying then 
+		stopFly() 
+	else 
+		startFly() 
+	end
+end)
+
+SpeedBox.FocusLost:Connect(function()
+	speed = tonumber(SpeedBox.Text) or 50
+	SpeedBox.Text = tostring(speed)
+end)
+
+-- ==================== RESET NOCLIP SAAT KARAKTER RESPAWN ====================
+player.CharacterAdded:Connect(function(newChar)
+	task.wait(0.5)
+	if flying then
+		-- Re-apply noclip setelah respawn
+		enableNoclip()
+		-- Restart fly
+		startFly()
+	end
+end)
+
+-- ==================== FLIGHT CONTROL LOOP ====================
+local PlayerModule = require(player.PlayerScripts:WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
+
+RunService.RenderStepped:Connect(function()
+	local t = tick()
+	UIGradient.Offset = Vector2.new(math.sin(t*2)*1, 0)
+	
+	if flying and currentRoot and lv and ao then
+		if not currentRoot.Parent then 
+			stopFly() 
+			return 
+		end
+		
+		if humanoid and humanoid.SeatPart then
+			humanoid.PlatformStand = false
+		else
+			humanoid.PlatformStand = true
+		end
+		
+		local cam = workspace.CurrentCamera
+		local moveVector = Controls:GetMoveVector()
+		local direction = (cam.CFrame.LookVector * -moveVector.Z) + (cam.CFrame.RightVector * moveVector.X)
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then direction += Vector3.new(0, 1, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then direction += Vector3.new(0, -1, 0) end
+		lv.VectorVelocity = (direction.Magnitude > 0) and (direction.Unit * (speed * speedMultiplier)) or Vector3.zero
+		ao.CFrame = cam.CFrame
+	end
+end)
