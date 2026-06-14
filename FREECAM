@@ -1,0 +1,613 @@
+-- ================================================
+-- IYANKINKA FREECAM - DARK RED EDITION (LEFT SIDE UI)
+-- UI: Dark Red + Glow Effect (Thickness 4)
+-- Features: Analog appears only when Freecam ON
+-- ================================================
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ================================================
+-- COLOR CONFIG (DARK RED + GLOW)
+-- ================================================
+local Colors = {
+    DarkBg = Color3.fromRGB(10, 6, 10),
+    DarkerBg = Color3.fromRGB(8, 4, 8),
+    CardBg = Color3.fromRGB(18, 12, 18),
+    RedGlow = Color3.fromRGB(220, 40, 60),
+    RedDark = Color3.fromRGB(180, 30, 50),
+    RedBright = Color3.fromRGB(255, 60, 80),
+    White = Color3.fromRGB(255, 255, 255),
+    GrayLight = Color3.fromRGB(200, 180, 190),
+    GrayDark = Color3.fromRGB(140, 120, 130),
+}
+
+-- State Freecam
+local Freecam = {
+    Active = false,
+    Speed = 2,
+    FOV = 70,
+    LookSensitivity = 0.005,
+    TouchSensitivity = 0.008,
+    RotX = 0,
+    RotY = 0,
+    Connection = nil,
+    OriginalCameraType = nil,
+    OriginalFOV = nil,
+    OriginalWalkSpeed = nil,
+    OriginalJumpPower = nil,
+    OriginalPlatformStand = nil,
+}
+
+-- Input state
+local Keys = {W=false, A=false, S=false, D=false}
+local Joystick = {Active=false, X=0, Y=0}
+local toggleBtn = nil
+local joyBg = nil
+local joyKnob = nil
+
+-- ================================================
+-- HELPER FUNCTIONS
+-- ================================================
+local function addGlow(instance, thickness, color)
+    local glow = Instance.new("UIStroke", instance)
+    glow.Thickness = thickness or 4
+    glow.Color = color or Colors.RedGlow
+    glow.Transparency = 0.3
+    glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return glow
+end
+
+local function addHover(btn, hoverColor)
+    local original = btn.BackgroundColor3
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = hoverColor}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = original}):Play()
+    end)
+end
+
+local function createTween(instance, props, dur, style, dir)
+    local tween = TweenService:Create(instance, TweenInfo.new(dur or 0.2, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+    tween:Play()
+    return tween
+end
+
+-- Character functions
+local function getCharacter() return LocalPlayer.Character end
+local function getHumanoid()
+    local char = getCharacter()
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function freezeCharacter(freeze)
+    local hum = getHumanoid()
+    if hum then
+        if freeze then
+            Freecam.OriginalWalkSpeed = hum.WalkSpeed
+            Freecam.OriginalJumpPower = hum.JumpPower
+            Freecam.OriginalPlatformStand = hum.PlatformStand
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            hum.PlatformStand = true
+        else
+            if Freecam.OriginalWalkSpeed then
+                hum.WalkSpeed = Freecam.OriginalWalkSpeed
+                hum.JumpPower = Freecam.OriginalJumpPower
+                hum.PlatformStand = Freecam.OriginalPlatformStand
+            else
+                hum.WalkSpeed = 16
+                hum.JumpPower = 50
+                hum.PlatformStand = false
+            end
+        end
+    end
+end
+
+-- ================================================
+-- SHOW/HIDE ANALOG
+-- ================================================
+local function showAnalog()
+    if joyBg and joyKnob then
+        joyBg.Visible = true
+        createTween(joyBg, {BackgroundTransparency = 0.3}, 0.2)
+        createTween(joyKnob, {BackgroundTransparency = 0.3}, 0.2)
+    end
+end
+
+local function hideAnalog()
+    if joyBg and joyKnob then
+        createTween(joyBg, {BackgroundTransparency = 1}, 0.2)
+        createTween(joyKnob, {BackgroundTransparency = 1}, 0.2)
+        task.wait(0.2)
+        joyBg.Visible = false
+        Joystick.Active = false
+        Joystick.X = 0
+        Joystick.Y = 0
+        if joyKnob then
+            joyKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+        end
+    end
+end
+
+-- ================================================
+-- FREECAM CORE
+-- ================================================
+local function startFreecam()
+    if Freecam.Active then return end
+    Freecam.Active = true
+
+    Freecam.OriginalCameraType = Camera.CameraType
+    Freecam.OriginalFOV = Camera.FieldOfView
+    
+    local rx, ry, rz = Camera.CFrame:ToEulerAnglesYXZ()
+    Freecam.RotX, Freecam.RotY = rx, ry
+
+    Camera.CameraType = Enum.CameraType.Scriptable
+    freezeCharacter(true)
+    
+    if UIS.MouseEnabled then UIS.MouseBehavior = Enum.MouseBehavior.LockCenter end
+
+    Freecam.Connection = RS.RenderStepped:Connect(function(dt)
+        local rotCF = CFrame.fromEulerAnglesYXZ(Freecam.RotX, Freecam.RotY, 0)
+        local moveDir = Vector3.new()
+
+        if Keys.W then moveDir = moveDir + Vector3.new(0,0,-1) end
+        if Keys.S then moveDir = moveDir + Vector3.new(0,0,1) end
+        if Keys.A then moveDir = moveDir + Vector3.new(-1,0,0) end
+        if Keys.D then moveDir = moveDir + Vector3.new(1,0,0) end
+
+        if Joystick.Active then
+            moveDir = moveDir + Vector3.new(Joystick.X, 0, Joystick.Y)
+        end
+
+        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+
+        local speed = Freecam.Speed * 60 * dt
+        local newPos = Camera.CFrame.Position + (rotCF * moveDir * speed)
+        
+        Camera.CFrame = CFrame.new(newPos) * rotCF
+        Camera.FieldOfView = Freecam.FOV
+    end)
+
+    if toggleBtn then
+        toggleBtn.Text = "ON"
+        toggleBtn.BackgroundColor3 = Colors.RedBright
+    end
+    
+    -- Show analog when freecam ON
+    showAnalog()
+end
+
+local function stopFreecam()
+    if not Freecam.Active then return end
+    Freecam.Active = false
+    if Freecam.Connection then Freecam.Connection:Disconnect(); Freecam.Connection = nil end
+    Camera.CameraType = Freecam.OriginalCameraType or Enum.CameraType.Custom
+    Camera.FieldOfView = Freecam.OriginalFOV or 70
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
+    freezeCharacter(false)
+    for k in pairs(Keys) do Keys[k] = false end
+    Joystick.Active = false
+    if toggleBtn then
+        toggleBtn.Text = "OFF"
+        toggleBtn.BackgroundColor3 = Colors.RedDark
+    end
+    
+    -- Hide analog when freecam OFF
+    hideAnalog()
+end
+
+local function toggleFreecam()
+    if Freecam.Active then stopFreecam() else startFreecam() end
+end
+
+-- ================================================
+-- INPUT HANDLERS (Mouse & Touch)
+-- ================================================
+UIS.InputChanged:Connect(function(input)
+    if not Freecam.Active then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        Freecam.RotY = Freecam.RotY - input.Delta.X * Freecam.LookSensitivity
+        Freecam.RotX = Freecam.RotX - input.Delta.Y * Freecam.LookSensitivity
+        Freecam.RotX = math.clamp(Freecam.RotX, -1.5, 1.5)
+    elseif input.UserInputType == Enum.UserInputType.Touch then
+        if input.Delta.Magnitude > 0.5 then
+            Freecam.RotY = Freecam.RotY - input.Delta.X * Freecam.TouchSensitivity
+            Freecam.RotX = Freecam.RotX - input.Delta.Y * Freecam.TouchSensitivity
+            Freecam.RotX = math.clamp(Freecam.RotX, -1.5, 1.5)
+        end
+    end
+end)
+
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local k = input.KeyCode
+        if k == Enum.KeyCode.W then Keys.W = true end
+        if k == Enum.KeyCode.A then Keys.A = true end
+        if k == Enum.KeyCode.S then Keys.S = true end
+        if k == Enum.KeyCode.D then Keys.D = true end
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local k = input.KeyCode
+        if k == Enum.KeyCode.W then Keys.W = false end
+        if k == Enum.KeyCode.A then Keys.A = false end
+        if k == Enum.KeyCode.S then Keys.S = false end
+        if k == Enum.KeyCode.D then Keys.D = false end
+    end
+end)
+
+-- ================================================
+-- MAIN GUI (LEFT SIDE - DARK RED + GLOW)
+-- ================================================
+local oldGUI = CoreGui:FindFirstChild("IYANKINKAFreecam")
+if oldGUI then oldGUI:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "IYANKINKAFreecam"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = CoreGui
+
+-- Main Panel (LEFT SIDE)
+local panel = Instance.new("Frame")
+panel.Size = UDim2.new(0, 160, 0, 175)
+panel.Position = UDim2.new(0, 10, 0, 10)  -- LEFT SIDE
+panel.BackgroundColor3 = Colors.DarkBg
+panel.BackgroundTransparency = 0
+panel.BorderSizePixel = 0
+panel.Parent = gui
+panel.Active = true
+panel.Draggable = true
+
+local panelCorner = Instance.new("UICorner", panel)
+panelCorner.CornerRadius = UDim.new(0, 10)
+
+local panelGlow = Instance.new("UIStroke", panel)
+panelGlow.Thickness = 4
+panelGlow.Color = Colors.RedGlow
+panelGlow.Transparency = 0.35
+
+local panelGradient = Instance.new("UIGradient", panel)
+panelGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 8, 12)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 4, 8))
+})
+panelGradient.Rotation = 135
+
+-- Pulse glow animation
+task.spawn(function()
+    while panel.Parent do
+        TweenService:Create(panelGlow, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {Transparency = 0.1, Color = Colors.RedBright}):Play()
+        task.wait(0.8)
+        TweenService:Create(panelGlow, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {Transparency = 0.4, Color = Colors.RedGlow}):Play()
+        task.wait(0.8)
+    end
+end)
+
+-- Title Bar
+local titleBar = Instance.new("Frame", panel)
+titleBar.Size = UDim2.new(1, -8, 0, 32)
+titleBar.Position = UDim2.new(0, 4, 0, 4)
+titleBar.BackgroundColor3 = Colors.DarkerBg
+titleBar.BackgroundTransparency = 0.2
+titleBar.BorderSizePixel = 0
+local titleCorner = Instance.new("UICorner", titleBar)
+titleCorner.CornerRadius = UDim.new(0, 8)
+
+-- LOGO TELAH DIHAPUS (ImageLabel tidak dibuat)
+
+local title = Instance.new("TextLabel", titleBar)
+title.Text = "IYANKINKA FREECAM"
+title.TextColor3 = Colors.White
+title.Size = UDim2.new(1, -80, 1, 0)
+title.Position = UDim2.new(0, 12, 0, 0)  -- Geser ke kiri karena logo dihapus
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 10
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local minBtn = Instance.new("TextButton", titleBar)
+minBtn.Text = "−"
+minBtn.Size = UDim2.new(0, 22, 0, 22)
+minBtn.Position = UDim2.new(1, -52, 0.5, -11)
+minBtn.BackgroundColor3 = Colors.RedDark
+minBtn.TextColor3 = Colors.White
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+minBtn.BorderSizePixel = 0
+local minCorner = Instance.new("UICorner", minBtn)
+minCorner.CornerRadius = UDim.new(0, 5)
+addGlow(minBtn, 4, Colors.RedGlow)
+addHover(minBtn, Colors.RedBright)
+
+local closeBtn = Instance.new("TextButton", titleBar)
+closeBtn.Text = "✕"
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -27, 0.5, -11)
+closeBtn.BackgroundColor3 = Colors.RedDark
+closeBtn.TextColor3 = Colors.White
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 12
+closeBtn.BorderSizePixel = 0
+local closeCorner = Instance.new("UICorner", closeBtn)
+closeCorner.CornerRadius = UDim.new(0, 5)
+addGlow(closeBtn, 4, Colors.RedGlow)
+addHover(closeBtn, Colors.RedBright)
+
+-- Content Frame
+local content = Instance.new("Frame", panel)
+content.Size = UDim2.new(1, -10, 1, -42)
+content.Position = UDim2.new(0, 5, 0, 40)
+content.BackgroundTransparency = 1
+
+-- Toggle Button
+toggleBtn = Instance.new("TextButton", content)
+toggleBtn.Size = UDim2.new(1, 0, 0, 32)
+toggleBtn.Position = UDim2.new(0, 0, 0, 0)
+toggleBtn.BackgroundColor3 = Colors.RedDark
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Colors.White
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 11
+toggleBtn.BorderSizePixel = 0
+local toggleCorner = Instance.new("UICorner", toggleBtn)
+toggleCorner.CornerRadius = UDim.new(0, 6)
+addGlow(toggleBtn, 4, Colors.RedGlow)
+addHover(toggleBtn, Colors.RedBright)
+
+toggleBtn.MouseButton1Click:Connect(toggleFreecam)
+
+-- Speed Control
+local speedFrame = Instance.new("Frame", content)
+speedFrame.Size = UDim2.new(1, 0, 0, 32)
+speedFrame.Position = UDim2.new(0, 0, 0, 38)
+speedFrame.BackgroundTransparency = 1
+
+local speedLabel = Instance.new("TextLabel", speedFrame)
+speedLabel.Text = "SPEED"
+speedLabel.TextColor3 = Colors.GrayLight
+speedLabel.Size = UDim2.new(0, 50, 1, 0)
+speedLabel.Position = UDim2.new(0, 0, 0, 0)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Font = Enum.Font.GothamBold
+speedLabel.TextSize = 9
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local speedMinus = Instance.new("TextButton", speedFrame)
+speedMinus.Text = "−"
+speedMinus.Size = UDim2.new(0, 24, 0, 24)
+speedMinus.Position = UDim2.new(0, 55, 0.5, -12)
+speedMinus.BackgroundColor3 = Colors.RedDark
+speedMinus.TextColor3 = Colors.White
+speedMinus.Font = Enum.Font.GothamBold
+speedMinus.TextSize = 14
+speedMinus.BorderSizePixel = 0
+local speedMinusCorner = Instance.new("UICorner", speedMinus)
+speedMinusCorner.CornerRadius = UDim.new(0, 5)
+addGlow(speedMinus, 4, Colors.RedGlow)
+addHover(speedMinus, Colors.RedBright)
+
+local speedValue = Instance.new("TextLabel", speedFrame)
+speedValue.Text = tostring(Freecam.Speed)
+speedValue.TextColor3 = Colors.White
+speedValue.Size = UDim2.new(0, 35, 0, 24)
+speedValue.Position = UDim2.new(0, 84, 0.5, -12)
+speedValue.BackgroundTransparency = 1
+speedValue.Font = Enum.Font.GothamBold
+speedValue.TextSize = 11
+
+local speedPlus = Instance.new("TextButton", speedFrame)
+speedPlus.Text = "+"
+speedPlus.Size = UDim2.new(0, 24, 0, 24)
+speedPlus.Position = UDim2.new(0, 124, 0.5, -12)
+speedPlus.BackgroundColor3 = Colors.RedDark
+speedPlus.TextColor3 = Colors.White
+speedPlus.Font = Enum.Font.GothamBold
+speedPlus.TextSize = 14
+speedPlus.BorderSizePixel = 0
+local speedPlusCorner = Instance.new("UICorner", speedPlus)
+speedPlusCorner.CornerRadius = UDim.new(0, 5)
+addGlow(speedPlus, 4, Colors.RedGlow)
+addHover(speedPlus, Colors.RedBright)
+
+speedMinus.MouseButton1Click:Connect(function()
+    Freecam.Speed = math.max(0.5, Freecam.Speed - 0.5)
+    speedValue.Text = string.format("%.1f", Freecam.Speed)
+end)
+speedPlus.MouseButton1Click:Connect(function()
+    Freecam.Speed = math.min(10, Freecam.Speed + 0.5)
+    speedValue.Text = string.format("%.1f", Freecam.Speed)
+end)
+
+-- FOV Control
+local fovFrame = Instance.new("Frame", content)
+fovFrame.Size = UDim2.new(1, 0, 0, 32)
+fovFrame.Position = UDim2.new(0, 0, 0, 76)
+fovFrame.BackgroundTransparency = 1
+
+local fovLabel = Instance.new("TextLabel", fovFrame)
+fovLabel.Text = "FOV"
+fovLabel.TextColor3 = Colors.GrayLight
+fovLabel.Size = UDim2.new(0, 50, 1, 0)
+fovLabel.Position = UDim2.new(0, 0, 0, 0)
+fovLabel.BackgroundTransparency = 1
+fovLabel.Font = Enum.Font.GothamBold
+fovLabel.TextSize = 9
+fovLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local fovMinus = Instance.new("TextButton", fovFrame)
+fovMinus.Text = "−"
+fovMinus.Size = UDim2.new(0, 24, 0, 24)
+fovMinus.Position = UDim2.new(0, 55, 0.5, -12)
+fovMinus.BackgroundColor3 = Colors.RedDark
+fovMinus.TextColor3 = Colors.White
+fovMinus.Font = Enum.Font.GothamBold
+fovMinus.TextSize = 14
+fovMinus.BorderSizePixel = 0
+local fovMinusCorner = Instance.new("UICorner", fovMinus)
+fovMinusCorner.CornerRadius = UDim.new(0, 5)
+addGlow(fovMinus, 4, Colors.RedGlow)
+addHover(fovMinus, Colors.RedBright)
+
+local fovValue = Instance.new("TextLabel", fovFrame)
+fovValue.Text = tostring(Freecam.FOV)
+fovValue.TextColor3 = Colors.White
+fovValue.Size = UDim2.new(0, 35, 0, 24)
+fovValue.Position = UDim2.new(0, 84, 0.5, -12)
+fovValue.BackgroundTransparency = 1
+fovValue.Font = Enum.Font.GothamBold
+fovValue.TextSize = 11
+
+local fovPlus = Instance.new("TextButton", fovFrame)
+fovPlus.Text = "+"
+fovPlus.Size = UDim2.new(0, 24, 0, 24)
+fovPlus.Position = UDim2.new(0, 124, 0.5, -12)
+fovPlus.BackgroundColor3 = Colors.RedDark
+fovPlus.TextColor3 = Colors.White
+fovPlus.Font = Enum.Font.GothamBold
+fovPlus.TextSize = 14
+fovPlus.BorderSizePixel = 0
+local fovPlusCorner = Instance.new("UICorner", fovPlus)
+fovPlusCorner.CornerRadius = UDim.new(0, 5)
+addGlow(fovPlus, 4, Colors.RedGlow)
+addHover(fovPlus, Colors.RedBright)
+
+fovMinus.MouseButton1Click:Connect(function()
+    Freecam.FOV = math.max(20, Freecam.FOV - 5)
+    fovValue.Text = tostring(Freecam.FOV)
+    if Freecam.Active then Camera.FieldOfView = Freecam.FOV end
+end)
+fovPlus.MouseButton1Click:Connect(function()
+    Freecam.FOV = math.min(120, Freecam.FOV + 5)
+    fovValue.Text = tostring(Freecam.FOV)
+    if Freecam.Active then Camera.FieldOfView = Freecam.FOV end
+end)
+
+-- Instruction Label
+local instrLabel = Instance.new("TextLabel", content)
+instrLabel.Size = UDim2.new(1, 0, 0, 20)
+instrLabel.Position = UDim2.new(0, 0, 0, 114)
+instrLabel.BackgroundTransparency = 1
+instrLabel.Text = "WASD • MOUSE/TOUCH"
+instrLabel.TextColor3 = Colors.GrayDark
+instrLabel.Font = Enum.Font.Gotham
+instrLabel.TextSize = 7
+instrLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+-- ================================================
+-- MOBILE JOYSTICK (HIDDEN BY DEFAULT, SHOW ONLY WHEN FREECAM ON)
+-- ================================================
+if UIS.TouchEnabled then
+    joyBg = Instance.new("Frame", gui)
+    joyBg.Size = UDim2.new(0, 120, 0, 120)
+    joyBg.Position = UDim2.new(0, 30, 1, -150)
+    joyBg.BackgroundColor3 = Colors.DarkerBg
+    joyBg.BackgroundTransparency = 1
+    joyBg.BorderSizePixel = 0
+    joyBg.Visible = false  -- HIDDEN BY DEFAULT
+    local joyCorner = Instance.new("UICorner", joyBg)
+    joyCorner.CornerRadius = UDim.new(1, 0)
+    addGlow(joyBg, 4, Colors.RedGlow)
+
+    joyKnob = Instance.new("Frame", joyBg)
+    joyKnob.Size = UDim2.new(0, 50, 0, 50)
+    joyKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+    joyKnob.BackgroundColor3 = Colors.RedDark
+    joyKnob.BackgroundTransparency = 1
+    joyKnob.BorderSizePixel = 0
+    local knobCorner = Instance.new("UICorner", joyKnob)
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    addGlow(joyKnob, 4, Colors.RedBright)
+
+    joyBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch and Freecam.Active then
+            Joystick.Active = true
+            local conn; conn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    Joystick.Active = false
+                    Joystick.X = 0; Joystick.Y = 0
+                    createTween(joyKnob, {Position = UDim2.new(0.5, -25, 0.5, -25)}, 0.1)
+                    if conn then conn:Disconnect() end
+                else
+                    local bgPos = joyBg.AbsolutePosition
+                    local bgSize = joyBg.AbsoluteSize
+                    local touchPos = input.Position
+                    local x = ((touchPos.X - bgPos.X) / bgSize.X) * 2 - 1
+                    local y = ((touchPos.Y - bgPos.Y) / bgSize.Y) * 2 - 1
+                    local len = math.sqrt(x*x + y*y)
+                    if len > 1 then x = x/len; y = y/len end
+                    if math.abs(x) < 0.15 then x = 0 end
+                    if math.abs(y) < 0.15 then y = 0 end
+                    Joystick.X = x; Joystick.Y = y
+                    createTween(joyKnob, {Position = UDim2.new(0.5 + x * 0.4, -25, 0.5 + y * 0.4, -25)}, 0.05)
+                end
+            end)
+        end
+    end)
+end
+
+-- ================================================
+-- MINIMIZE ANIMATION
+-- ================================================
+local minimized = false
+local originalSize = panel.Size
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        createTween(panel, {Size = UDim2.new(0, 160, 0, 36)}, 0.25)
+        content.Visible = false
+        minBtn.Text = "+"
+    else
+        createTween(panel, {Size = originalSize}, 0.25)
+        content.Visible = true
+        minBtn.Text = "−"
+    end
+end)
+
+-- Close button
+closeBtn.MouseButton1Click:Connect(function()
+    stopFreecam()
+    gui:Destroy()
+end)
+
+gui.Destroying:Connect(stopFreecam)
+
+-- ================================================
+-- ENTRY ANIMATION
+-- ================================================
+panel.Size = UDim2.new(0, 0, 0, 0)
+panel.BackgroundTransparency = 1
+panelGlow.Transparency = 1
+createTween(panel, {Size = UDim2.new(0, 160, 0, 175), BackgroundTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+createTween(panelGlow, {Transparency = 0.35}, 0.5)
+
+-- ================================================
+-- INSERT KEY TOGGLE
+-- ================================================
+UIS.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        gui.Enabled = not gui.Enabled
+    end
+end)
+
+print("======================================")
+print("🔥 IYANKINKA FREECAM - DARK RED EDITION")
+print("======================================")
+print("✨ UI: LEFT SIDE + Glow Effect (Thickness 4)")
+print("✨ ANALOG ONLY APPEARS WHEN FREECAM ON")
+print("✨ WASD / Joystick Mobile")
+print("✨ Mouse/Touch Look (Smooth)")
+print("✨ Speed & FOV Control")
+print("✨ Press INSERT to hide/show")
+print("======================================")
