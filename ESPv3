@@ -1,0 +1,441 @@
+-- ==================== IYANKINKA ESP ULTIMATE V3.1 FINAL ====================
+-- ✅ REAL-TIME PLAYER DETECTION
+-- ✅ FORCE REFRESH SYSTEM
+-- ✅ AUTO-RETRY MECHANISM
+-- ✅ FULL MAP DETECTION
+-- ✅ GUI ON / OFF
+-- ✅ STATUS PANEL
+-- ✅ MINIMIZE BUTTON
+-- ✅ CLOSE BUTTON
+-- ✅ DRAGGABLE GUI
+-- ============================================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ==================== STATE ====================
+_G.IYANKINKAESP = _G.IYANKINKAESP or {}
+local ESPState = _G.IYANKINKAESP
+
+ESPState.Active = true
+ESPState.Objects = {}
+ESPState.Connections = {}
+ESPState.PlayerTracking = {}
+
+-- ==================== CONFIG ====================
+local Config = {
+    EnemyColor = Color3.fromRGB(255, 60, 60),
+    FriendlyColor = Color3.fromRGB(60, 255, 60),
+    DefaultColor = Color3.fromRGB(255,255,255),
+
+    BoxTransparency = 0.65,
+    BoxThickness = 2,
+    LineThickness = 2,
+    TextSize = 14,
+
+    UpdateRate = 0.03,
+    ForceRefreshInterval = 5
+}
+
+-- ==================== NOTIFICATION ====================
+pcall(function()
+    StarterGui:SetCore("SendNotification", {
+        Title = "🟢 IYANKINKA SERVER ESP",
+        Text = "ESP FINAL VERSION LOADED",
+        Duration = 5
+    })
+end)
+
+-- ==================== FUNCTIONS ====================
+local function GetPlayerColor(player)
+    if LocalPlayer.Team and player.Team then
+        if LocalPlayer.Team == player.Team then
+            return Config.FriendlyColor
+        else
+            return Config.EnemyColor
+        end
+    end
+
+    return Config.DefaultColor
+end
+
+local function FormatDistance(distance)
+    return string.format("%.0fm", distance)
+end
+
+local function GetHealthPercent(humanoid)
+    if humanoid and humanoid.MaxHealth > 0 then
+        return math.floor((humanoid.Health / humanoid.MaxHealth) * 100)
+    end
+    return 0
+end
+
+-- ==================== CREATE ESP ====================
+local function CreateESP(player)
+    if player == LocalPlayer then return end
+    if ESPState.Objects[player] then return end
+    if not ESPState.Active then return end
+
+    local character = player.Character
+    if not character then return end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+    if not root or not humanoid then return end
+
+    -- Folder
+    local folder = Instance.new("Folder")
+    folder.Name = "ESP_" .. player.Name
+    folder.Parent = Camera
+
+    -- BOX
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = root
+    box.Size = Vector3.new(4,6,1)
+    box.Color3 = GetPlayerColor(player)
+    box.AlwaysOnTop = true
+    box.Transparency = Config.BoxTransparency
+    box.ZIndex = 10
+    box.Parent = folder
+
+    -- BILLBOARD
+    local billboard = Instance.new("BillboardGui")
+    billboard.Adornee = root
+    billboard.Size = UDim2.new(0,200,0,100)
+    billboard.StudsOffset = Vector3.new(0,4,0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = folder
+
+    local frame = Instance.new("Frame")
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1,0,1,0)
+    frame.Parent = billboard
+
+    -- NAME
+    local name = Instance.new("TextLabel")
+    name.BackgroundTransparency = 1
+    name.Size = UDim2.new(1,0,0.3,0)
+    name.Font = Enum.Font.GothamBold
+    name.Text = player.Name
+    name.TextColor3 = Color3.new(1,1,1)
+    name.TextStrokeTransparency = 0
+    name.TextSize = 15
+    name.Parent = frame
+
+    -- HEALTH
+    local hp = Instance.new("TextLabel")
+    hp.BackgroundTransparency = 1
+    hp.Position = UDim2.new(0,0,0.3,0)
+    hp.Size = UDim2.new(1,0,0.3,0)
+    hp.Font = Enum.Font.GothamBold
+    hp.Text = "HP: 100%"
+    hp.TextColor3 = Color3.fromRGB(0,255,0)
+    hp.TextStrokeTransparency = 0
+    hp.TextSize = 14
+    hp.Parent = frame
+
+    -- DISTANCE
+    local distance = Instance.new("TextLabel")
+    distance.BackgroundTransparency = 1
+    distance.Position = UDim2.new(0,0,0.6,0)
+    distance.Size = UDim2.new(1,0,0.3,0)
+    distance.Font = Enum.Font.GothamBold
+    distance.Text = "0m"
+    distance.TextColor3 = Color3.fromRGB(255,255,0)
+    distance.TextStrokeTransparency = 0
+    distance.TextSize = 14
+    distance.Parent = frame
+
+    -- LINE
+    local line = Drawing.new("Line")
+    line.Thickness = Config.LineThickness
+    line.Transparency = 1
+    line.Visible = true
+
+    ESPState.Objects[player] = {
+        Folder = folder,
+        Box = box,
+        Billboard = billboard,
+        Name = name,
+        HP = hp,
+        Distance = distance,
+        Line = line,
+        Root = root,
+        Humanoid = humanoid
+    }
+end
+
+-- ==================== REMOVE ESP ====================
+local function RemoveESP(player)
+    local esp = ESPState.Objects[player]
+
+    if esp then
+        pcall(function()
+            if esp.Folder then
+                esp.Folder:Destroy()
+            end
+
+            if esp.Line then
+                esp.Line:Remove()
+            end
+        end)
+
+        ESPState.Objects[player] = nil
+    end
+end
+
+-- ==================== UPDATE ESP ====================
+local function UpdateESP()
+    if not ESPState.Active then return end
+
+    for player, esp in pairs(ESPState.Objects) do
+        if player and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+
+            if root and humanoid then
+                local color = GetPlayerColor(player)
+
+                esp.Box.Adornee = root
+                esp.Box.Color3 = color
+
+                esp.Name.TextColor3 = color
+
+                local hpPercent = GetHealthPercent(humanoid)
+                esp.HP.Text = "HP: " .. hpPercent .. "%"
+
+                local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+                if localRoot then
+                    local dist = (root.Position - localRoot.Position).Magnitude
+                    esp.Distance.Text = FormatDistance(dist)
+                end
+
+                local pos, visible = Camera:WorldToViewportPoint(root.Position)
+
+                if visible then
+                    esp.Line.Visible = true
+                    esp.Line.Color = color
+
+                    esp.Line.From = Vector2.new(
+                        Camera.ViewportSize.X / 2,
+                        Camera.ViewportSize.Y
+                    )
+
+                    esp.Line.To = Vector2.new(pos.X, pos.Y)
+                else
+                    esp.Line.Visible = false
+                end
+            end
+        end
+    end
+end
+
+-- ==================== PLAYER SETUP ====================
+local function SetupPlayer(player)
+    if player == LocalPlayer then return end
+
+    task.spawn(function()
+        repeat task.wait()
+        until player.Character
+
+        CreateESP(player)
+    end)
+
+    player.CharacterAdded:Connect(function()
+        task.wait(1)
+
+        RemoveESP(player)
+        CreateESP(player)
+    end)
+end
+
+-- Existing Players
+for _, player in pairs(Players:GetPlayers()) do
+    SetupPlayer(player)
+end
+
+-- New Players
+Players.PlayerAdded:Connect(function(player)
+    SetupPlayer(player)
+end)
+
+-- Remove Players
+Players.PlayerRemoving:Connect(function(player)
+    RemoveESP(player)
+end)
+
+-- ==================== MAIN LOOP ====================
+RunService.RenderStepped:Connect(function()
+    UpdateESP()
+end)
+
+-- ==================== AUTO REFRESH ====================
+task.spawn(function()
+    while true do
+        task.wait(Config.ForceRefreshInterval)
+
+        if ESPState.Active then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and not ESPState.Objects[player] then
+                    CreateESP(player)
+                end
+            end
+        end
+    end
+end)
+
+-- ==================== GUI ====================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "IYANKINKAESP_GUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local Main = Instance.new("Frame")
+Main.Parent = ScreenGui
+Main.Size = UDim2.new(0,260,0,150)
+Main.Position = UDim2.new(0.03,0,0.3,0)
+Main.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0,10)
+
+-- TITLE
+local Title = Instance.new("TextLabel")
+Title.Parent = Main
+Title.BackgroundTransparency = 1
+Title.Size = UDim2.new(1,-80,0,35)
+Title.Position = UDim2.new(0,10,0,0)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "IYANKINKA ESP"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- STATUS
+local Status = Instance.new("TextLabel")
+Status.Parent = Main
+Status.BackgroundTransparency = 1
+Status.Position = UDim2.new(0,10,0,45)
+Status.Size = UDim2.new(1,-20,0,25)
+Status.Font = Enum.Font.GothamBold
+Status.Text = "STATUS : ACTIVE"
+Status.TextColor3 = Color3.fromRGB(0,255,0)
+Status.TextSize = 15
+
+-- TOGGLE
+local Toggle = Instance.new("TextButton")
+Toggle.Parent = Main
+Toggle.Size = UDim2.new(0.8,0,0,38)
+Toggle.Position = UDim2.new(0.1,0,0.65,0)
+Toggle.BackgroundColor3 = Color3.fromRGB(0,170,0)
+Toggle.Text = "TURN OFF ESP"
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.Font = Enum.Font.GothamBold
+Toggle.TextSize = 15
+
+Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0,8)
+
+-- MINIMIZE
+local Minimize = Instance.new("TextButton")
+Minimize.Parent = Main
+Minimize.Size = UDim2.new(0,28,0,25)
+Minimize.Position = UDim2.new(1,-70,0,5)
+Minimize.BackgroundColor3 = Color3.fromRGB(255,170,0)
+Minimize.Text = "-"
+Minimize.TextColor3 = Color3.new(1,1,1)
+Minimize.Font = Enum.Font.GothamBold
+Minimize.TextSize = 18
+
+Instance.new("UICorner", Minimize).CornerRadius = UDim.new(0,6)
+
+-- CLOSE
+local Close = Instance.new("TextButton")
+Close.Parent = Main
+Close.Size = UDim2.new(0,28,0,25)
+Close.Position = UDim2.new(1,-35,0,5)
+Close.BackgroundColor3 = Color3.fromRGB(255,60,60)
+Close.Text = "X"
+Close.TextColor3 = Color3.new(1,1,1)
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 14
+
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0,6)
+
+-- ==================== GUI FUNCTIONS ====================
+local minimized = false
+
+Minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+
+    if minimized then
+        Toggle.Visible = false
+        Status.Visible = false
+        Main.Size = UDim2.new(0,260,0,40)
+        Minimize.Text = "+"
+    else
+        Toggle.Visible = true
+        Status.Visible = true
+        Main.Size = UDim2.new(0,260,0,150)
+        Minimize.Text = "-"
+    end
+end)
+
+Close.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+Toggle.MouseButton1Click:Connect(function()
+    ESPState.Active = not ESPState.Active
+
+    if ESPState.Active then
+        Toggle.Text = "TURN OFF ESP"
+        Toggle.BackgroundColor3 = Color3.fromRGB(0,170,0)
+
+        Status.Text = "STATUS : ACTIVE"
+        Status.TextColor3 = Color3.fromRGB(0,255,0)
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                CreateESP(player)
+            end
+        end
+
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "🟢 ESP ENABLED",
+                Text = "IYANKINKA SERVER ESP Activated",
+                Duration = 3
+            })
+        end)
+
+    else
+        Toggle.Text = "TURN ON ESP"
+        Toggle.BackgroundColor3 = Color3.fromRGB(170,0,0)
+
+        Status.Text = "STATUS : DISABLED"
+        Status.TextColor3 = Color3.fromRGB(255,0,0)
+
+        for player, _ in pairs(ESPState.Objects) do
+            RemoveESP(player)
+        end
+
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "🔴 ESP DISABLED",
+                Text = "IYANKINKA SERVER ESP Disabled",
+                Duration = 3
+            })
+        end)
+    end
+end)
+
+print("🔥 IYANKINKA SERVER ESP Ultimate V3.1 FINAL Loaded")
