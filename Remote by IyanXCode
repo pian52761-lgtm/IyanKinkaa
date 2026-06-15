@@ -1,0 +1,1137 @@
+-- IYANXCODE BRUTAL FIRE - REMOTE EVENT SPAMMER
+local player = game.Players.LocalPlayer
+repeat task.wait() until player and player:FindFirstChild("PlayerGui")
+
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- ==============================================
+-- COLOR CONFIG
+-- ==============================================
+local Colors = {
+    DarkBg = Color3.fromRGB(10, 6, 10),
+    DarkerBg = Color3.fromRGB(8, 4, 8),
+    CardBg = Color3.fromRGB(18, 12, 18),
+    RedGlow = Color3.fromRGB(220, 40, 60),
+    RedDark = Color3.fromRGB(180, 30, 50),
+    RedBright = Color3.fromRGB(255, 60, 80),
+    White = Color3.fromRGB(255, 255, 255),
+    GrayLight = Color3.fromRGB(200, 180, 190),
+    GrayDark = Color3.fromRGB(140, 120, 130),
+    Green = Color3.fromRGB(80, 200, 100),
+    GreenBright = Color3.fromRGB(0, 255, 120),
+}
+
+-- ==============================================
+-- NOTIFICATION SYSTEM
+-- ==============================================
+local screenGui = nil
+local function showNotification(title, msg, isError)
+    if not screenGui then return end
+    local notifFrame = Instance.new("Frame")
+    notifFrame.Size = UDim2.new(0, 260, 0, 38)
+    notifFrame.Position = UDim2.new(0.5, -130, 1, -50)
+    notifFrame.AnchorPoint = Vector2.new(0.5, 1)
+    notifFrame.BackgroundColor3 = Colors.CardBg
+    notifFrame.BackgroundTransparency = 0.05
+    notifFrame.ZIndex = 100
+    notifFrame.Parent = screenGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 10)
+    notifCorner.Parent = notifFrame
+    
+    local notifStroke = Instance.new("UIStroke")
+    notifStroke.Thickness = 1.5
+    notifStroke.Color = isError and Colors.RedBright or Colors.RedGlow
+    notifStroke.Transparency = 0.2
+    notifStroke.Parent = notifFrame
+    
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(0, 28, 1, 0)
+    icon.Position = UDim2.new(0, 8, 0, 0)
+    icon.BackgroundTransparency = 1
+    icon.Text = isError and "⚠️" or "🔥"
+    icon.TextColor3 = isError and Colors.RedBright or Colors.RedGlow
+    icon.TextSize = 16
+    icon.Font = Enum.Font.GothamBold
+    icon.Parent = notifFrame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -44, 0.4, 0)
+    titleLabel.Position = UDim2.new(0, 40, 0, 5)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = Colors.White
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 11
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = notifFrame
+    
+    local msgLabel = Instance.new("TextLabel")
+    msgLabel.Size = UDim2.new(1, -44, 0.5, 0)
+    msgLabel.Position = UDim2.new(0, 40, 0, 20)
+    msgLabel.BackgroundTransparency = 1
+    msgLabel.Text = msg
+    msgLabel.TextColor3 = Colors.GrayLight
+    msgLabel.Font = Enum.Font.Gotham
+    msgLabel.TextSize = 9
+    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+    msgLabel.Parent = notifFrame
+    
+    TweenService:Create(notifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -130, 1, -8)
+    }):Play()
+    
+    task.wait(2)
+    TweenService:Create(notifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -130, 1, -50)
+    }):Play()
+    task.wait(0.25)
+    notifFrame:Destroy()
+end
+
+-- ==============================================
+-- KONFIGURASI
+-- ==============================================
+local config = {
+    spamDelay = 0.01,
+    spamCount = 200,
+    backupServers = { [1] = true, [2] = true },
+    speedMultiplier = 60,
+    maxMultiplier = 150,
+    minMultiplier = 50,
+}
+
+-- ==============================================
+-- VARIABLES
+-- ==============================================
+local remoteEvents = {}
+local isSpamming = false
+local autoSpamEnabled = false
+local autoSpamThread = nil
+local firedCount = 0
+local broadcastMessage = "IYANXCODE IS HERE"
+local broadcastEnabled = false
+
+local performance = {
+    lastTick = 0,
+    currentRPS = 0,
+    peakRPS = 0,
+    multiplier = 60,
+}
+
+-- ==============================================
+-- FUNGSI SCAN REMOTES
+-- ==============================================
+local function scanAllRemotes()
+    showNotification("🔍 SCANNING", "Looking for RemoteEvents...")
+    remoteEvents = {}
+    
+    local function scanContainer(container)
+        pcall(function()
+            for _, obj in ipairs(container:GetDescendants()) do
+                if obj:IsA("RemoteEvent") then
+                    table.insert(remoteEvents, {
+                        obj = obj,
+                        name = obj.Name,
+                        path = obj:GetFullName(),
+                        active = true
+                    })
+                end
+            end
+        end)
+    end
+    
+    scanContainer(ReplicatedStorage)
+    pcall(function() scanContainer(workspace) end)
+    pcall(function() scanContainer(game:GetService("Lighting")) end)
+    pcall(function() scanContainer(Players) end)
+    
+    showNotification("✅ SCAN COMPLETE", "Found " .. #remoteEvents .. " RemoteEvents")
+    return remoteEvents
+end
+
+-- ==============================================
+-- GENERATE PAYLOAD
+-- ==============================================
+local function generatePayload()
+    local payloads = {
+        "loadstring", "print('IYANXCODE WAS HERE')", game.JobId, player.UserId,
+        {cmd = "execute", code = "print('hi')"}, "excute", "yahhahHa", "ijinn",
+        "exploit", "bypass", "spam remote", "EXPLOITMALAY", "IYANXCODE FAMILY",
+        1337, 9999, true, false, nil,
+        {command = "fly", args = {true}}, {command = "kill", target = player.Name},
+        {command = "admin", plr = player.Name}, {command = "exploit", type = "crash"},
+        {cmd = "destroy", target = "all"}, math.random(1000, 9999),
+        tostring(math.random()), "data_" .. math.random(100, 999),
+        "IYANXCODE_BRUTAL", tick(),
+    }
+    return payloads[math.random(1, #payloads)]
+end
+
+local function generateBroadcastPayload()
+    local broadcastPayloads = {
+        {["Message"] = broadcastMessage}, {["msg"] = broadcastMessage},
+        {["text"] = broadcastMessage}, {["announce"] = broadcastMessage},
+        {["content"] = broadcastMessage}, {["data"] = broadcastMessage},
+        {["notice"] = broadcastMessage}, {["broadcast"] = broadcastMessage},
+        {["chat"] = broadcastMessage}, {["say"] = broadcastMessage},
+        {["title"] = broadcastMessage, ["text"] = broadcastMessage},
+        {["header"] = broadcastMessage, ["body"] = broadcastMessage},
+        {["command"] = "say", ["args"] = {broadcastMessage}},
+        {["cmd"] = "bc", ["msg"] = broadcastMessage},
+        {["type"] = "announcement", ["value"] = broadcastMessage},
+        broadcastMessage,
+    }
+    return broadcastPayloads[math.random(1, #broadcastPayloads)]
+end
+
+-- ==============================================
+-- GET ACTIVE REMOTES
+-- ==============================================
+local function getActiveRemotes()
+    local active = {}
+    for _, r in ipairs(remoteEvents) do
+        if r.active then
+            table.insert(active, r.obj)
+        end
+    end
+    return active
+end
+
+-- ==============================================
+-- SPAM ONCE
+-- ==============================================
+local function spamOnce()
+    local activeRemotes = getActiveRemotes()
+    if #activeRemotes == 0 then
+        showNotification("❌ ERROR", "No active remotes! Scan & enable some.", true)
+        return
+    end
+    
+    if autoSpamEnabled then
+        showNotification("⚠️ WARNING", "Stop auto spam first!", true)
+        return
+    end
+    
+    showNotification("💥 SPAM ONCE", "Spamming " .. config.spamCount .. "x on " .. #activeRemotes .. " remotes")
+    
+    if statusLabel then
+        TweenService:Create(statusLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.RedBright}):Play()
+        statusLabel.Text = "⚡ SPAMMING ONCE"
+    end
+    
+    local spammed = 0
+    while spammed < config.spamCount do
+        for _, remote in ipairs(activeRemotes) do
+            pcall(function()
+                if broadcastEnabled then
+                    remote:FireServer(generateBroadcastPayload())
+                else
+                    remote:FireServer(generatePayload())
+                end
+            end)
+        end
+        spammed = spammed + 1
+        task.wait(config.spamDelay)
+    end
+    
+    if statusLabel then
+        TweenService:Create(statusLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.GrayDark}):Play()
+        statusLabel.Text = "● STANDBY"
+    end
+    
+    showNotification("✅ SPAM COMPLETE", "One shot spam finished")
+end
+
+-- ==============================================
+-- LOOP FOREVER AUTO SPAM
+-- ==============================================
+local function startAutoSpam()
+    if autoSpamEnabled then return end
+    
+    local activeRemotes = getActiveRemotes()
+    if #activeRemotes == 0 then
+        showNotification("❌ ERROR", "No active remotes! Scan & enable some.", true)
+        return
+    end
+    
+    autoSpamEnabled = true
+    firedCount = 0
+    performance.lastTick = tick()
+    performance.currentRPS = 0
+    performance.multiplier = config.speedMultiplier
+    
+    local mode = broadcastEnabled and "📢 BROADCAST" or "💥 BRUTAL SPAM"
+    showNotification("🔄 AUTO SPAM ON", mode .. " | " .. #activeRemotes .. " remotes active")
+    
+    if statusLabel then
+        TweenService:Create(statusLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.RedBright}):Play()
+        statusLabel.Text = "🔁 AUTO SPAM ACTIVE"
+    end
+    
+    if autoSpamButton then
+        TweenService:Create(autoSpamButton, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedBright}):Play()
+        autoSpamButton.Text = "⏹️ AUTO SPAM ON"
+    end
+    
+    autoSpamThread = coroutine.create(function()
+        while autoSpamEnabled do
+            local activeNow = getActiveRemotes()
+            if #activeNow == 0 then
+                showNotification("⚠️ WARNING", "No active remotes! Auto spam stopped.", true)
+                stopAutoSpam()
+                break
+            end
+            
+            local now = tick()
+            local delta = now - performance.lastTick
+            if delta > 0.05 then
+                performance.currentRPS = firedCount / delta
+                performance.lastTick = now
+                if performance.currentRPS > performance.peakRPS then
+                    performance.peakRPS = performance.currentRPS
+                end
+                if performance.currentRPS > 7000 then
+                    performance.multiplier = math.min(performance.multiplier + 3, config.maxMultiplier)
+                elseif performance.currentRPS < 4000 then
+                    performance.multiplier = math.max(performance.multiplier - 2, config.minMultiplier)
+                end
+            end
+            
+            for i = 1, performance.multiplier do
+                if not autoSpamEnabled then break end
+                for _, remote in ipairs(activeNow) do
+                    if not autoSpamEnabled then break end
+                    task.spawn(function()
+                        pcall(function()
+                            if broadcastEnabled then
+                                remote:FireServer(generateBroadcastPayload())
+                            else
+                                remote:FireServer(generatePayload())
+                            end
+                        end)
+                    end)
+                    firedCount = firedCount + 1
+                end
+            end
+            task.wait(config.spamDelay)
+        end
+    end)
+    
+    coroutine.resume(autoSpamThread)
+end
+
+local function stopAutoSpam()
+    autoSpamEnabled = false
+    autoSpamThread = nil
+    
+    if statusLabel then
+        TweenService:Create(statusLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.GrayDark}):Play()
+        statusLabel.Text = "● STANDBY"
+    end
+    
+    if autoSpamButton then
+        TweenService:Create(autoSpamButton, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedDark}):Play()
+        autoSpamButton.Text = "🔄 AUTO SPAM"
+    end
+    
+    showNotification("⏹️ AUTO SPAM OFF", "Auto spam stopped | Peak RPS: " .. math.floor(performance.peakRPS))
+    firedCount = 0
+end
+
+local function toggleAutoSpam()
+    if autoSpamEnabled then
+        stopAutoSpam()
+    else
+        startAutoSpam()
+    end
+end
+
+local function stopAllSpam()
+    if autoSpamEnabled then
+        stopAutoSpam()
+    end
+    if statusLabel then
+        TweenService:Create(statusLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.GrayDark}):Play()
+        statusLabel.Text = "● STANDBY"
+    end
+    showNotification("⏹️ SPAM STOPPED", "All spam stopped")
+end
+
+-- ==============================================
+-- CREATE GUI (ULTRA SMOOTH)
+-- ==============================================
+screenGui = Instance.new("ScreenGui")
+screenGui.Name = "IYANXCODE_BrutalFire"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 500)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -250)
+mainFrame.BackgroundColor3 = Colors.DarkBg
+mainFrame.BackgroundTransparency = 0
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 16)
+mainCorner.Parent = mainFrame
+
+local outerGlow = Instance.new("UIStroke")
+outerGlow.Thickness = 1.5
+outerGlow.Color = Colors.RedGlow
+outerGlow.Transparency = 0.35
+outerGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+outerGlow.Parent = mainFrame
+
+local innerGlowStroke = Instance.new("UIStroke")
+innerGlowStroke.Thickness = 0.8
+innerGlowStroke.Color = Colors.RedBright
+innerGlowStroke.Transparency = 0.6
+innerGlowStroke.Parent = mainFrame
+
+local bgGradient = Instance.new("UIGradient")
+bgGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 8, 12)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 4, 8))
+})
+bgGradient.Rotation = 135
+bgGradient.Parent = mainFrame
+
+-- Smooth Pulse Animation
+task.spawn(function()
+    while mainFrame.Parent do
+        TweenService:Create(outerGlow, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.15, Color = Colors.RedBright}):Play()
+        TweenService:Create(innerGlowStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.45, Color = Colors.RedBright}):Play()
+        task.wait(1)
+        TweenService:Create(outerGlow, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.5, Color = Colors.RedGlow}):Play()
+        TweenService:Create(innerGlowStroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.7, Color = Colors.RedGlow}):Play()
+        task.wait(1)
+    end
+end)
+
+-- ===== TITLE BAR =====
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, -16, 0, 46)
+titleBar.Position = UDim2.new(0, 8, 0, 6)
+titleBar.BackgroundColor3 = Colors.DarkerBg
+titleBar.BackgroundTransparency = 0.2
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+-- LOGO REMOVED
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0.5, 0, 0.5, 0)
+title.Position = UDim2.new(0, 12, 0, 6)
+title.BackgroundTransparency = 1
+title.Text = "IYANXCODE BRUTAL FIRE"
+title.TextColor3 = Colors.White
+title.TextSize = 14
+title.Font = Enum.Font.GothamBlack
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(0.5, 0, 0.3, 0)
+subtitle.Position = UDim2.new(0, 12, 0, 24)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "By IyanXCode"
+subtitle.TextColor3 = Colors.GrayDark
+subtitle.TextSize = 9
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -36, 0.5, -13)
+closeBtn.BackgroundColor3 = Colors.RedDark
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Colors.White
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 7)
+closeCorner.Parent = closeBtn
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 26, 0, 26)
+minBtn.Position = UDim2.new(1, -68, 0.5, -13)
+minBtn.BackgroundColor3 = Colors.DarkerBg
+minBtn.Text = "−"
+minBtn.TextColor3 = Colors.GrayLight
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 16
+minBtn.BorderSizePixel = 0
+minBtn.Parent = titleBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 7)
+minCorner.Parent = minBtn
+
+local function addHover(btn, hoverColor)
+    local original = btn.BackgroundColor3
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundColor3 = hoverColor}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 28, 0, 28)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {BackgroundColor3 = original}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 26, 0, 26)}):Play()
+    end)
+end
+
+addHover(minBtn, Colors.RedDark)
+addHover(closeBtn, Colors.RedBright)
+
+closeBtn.MouseButton1Click:Connect(function()
+    stopAllSpam()
+    TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
+    task.wait(0.2)
+    screenGui:Destroy()
+end)
+
+local divider = Instance.new("Frame")
+divider.Size = UDim2.new(0.88, 0, 0, 1)
+divider.Position = UDim2.new(0.06, 0, 0, 56)
+divider.BackgroundColor3 = Colors.RedGlow
+divider.BackgroundTransparency = 0.4
+divider.Parent = mainFrame
+
+-- ===== CONTENT SCROLL =====
+local contentFrame = Instance.new("ScrollingFrame")
+contentFrame.Size = UDim2.new(1, -16, 1, -66)
+contentFrame.Position = UDim2.new(0, 8, 0, 60)
+contentFrame.BackgroundTransparency = 1
+contentFrame.ScrollBarThickness = 3
+contentFrame.ScrollBarImageColor3 = Colors.RedGlow
+contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+contentFrame.Parent = mainFrame
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 8)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = contentFrame
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    TweenService:Create(contentFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 15)}):Play()
+end)
+
+-- ===== STATUS CARD =====
+local statusCard = Instance.new("Frame")
+statusCard.Size = UDim2.new(0.95, 0, 0, 60)
+statusCard.BackgroundColor3 = Colors.CardBg
+statusCard.BackgroundTransparency = 0.2
+statusCard.BorderSizePixel = 0
+statusCard.Parent = contentFrame
+
+local statusCorner = Instance.new("UICorner")
+statusCorner.CornerRadius = UDim.new(0, 10)
+statusCorner.Parent = statusCard
+
+local statusStroke = Instance.new("UIStroke")
+statusStroke.Thickness = 1
+statusStroke.Color = Colors.RedGlow
+statusStroke.Transparency = 0.4
+statusStroke.Parent = statusCard
+
+statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.6, 0, 0.5, 0)
+statusLabel.Position = UDim2.new(0, 12, 0, 5)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "● STANDBY"
+statusLabel.TextColor3 = Colors.GrayDark
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 12
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = statusCard
+
+local rpsLabel = Instance.new("TextLabel")
+rpsLabel.Size = UDim2.new(0.6, 0, 0.4, 0)
+rpsLabel.Position = UDim2.new(0, 12, 0, 30)
+rpsLabel.BackgroundTransparency = 1
+rpsLabel.Text = "RPS: 0 | PEAK: 0"
+rpsLabel.TextColor3 = Colors.GrayLight
+rpsLabel.Font = Enum.Font.Gotham
+rpsLabel.TextSize = 9
+rpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+rpsLabel.Parent = statusCard
+
+local remoteCountLabel = Instance.new("TextLabel")
+remoteCountLabel.Size = UDim2.new(0.3, 0, 0.4, 0)
+remoteCountLabel.Position = UDim2.new(0.7, 0, 0, 5)
+remoteCountLabel.BackgroundTransparency = 1
+remoteCountLabel.Text = "0"
+remoteCountLabel.TextColor3 = Colors.RedBright
+remoteCountLabel.Font = Enum.Font.GothamBold
+remoteCountLabel.TextSize = 22
+remoteCountLabel.TextXAlignment = Enum.TextXAlignment.Right
+remoteCountLabel.Parent = statusCard
+
+local remoteSub = Instance.new("TextLabel")
+remoteSub.Size = UDim2.new(0.3, 0, 0.3, 0)
+remoteSub.Position = UDim2.new(0.7, 0, 0, 34)
+remoteSub.BackgroundTransparency = 1
+remoteSub.Text = "remotes"
+remoteSub.TextColor3 = Colors.GrayDark
+remoteSub.Font = Enum.Font.Gotham
+remoteSub.TextSize = 8
+remoteSub.TextXAlignment = Enum.TextXAlignment.Right
+remoteSub.Parent = statusCard
+
+-- ===== SPAM COUNT (DENGAN PRESET) =====
+local countCard = Instance.new("Frame")
+countCard.Size = UDim2.new(0.95, 0, 0, 85)
+countCard.BackgroundColor3 = Colors.CardBg
+countCard.BackgroundTransparency = 0.2
+countCard.BorderSizePixel = 0
+countCard.Parent = contentFrame
+
+local countCorner = Instance.new("UICorner")
+countCorner.CornerRadius = UDim.new(0, 10)
+countCorner.Parent = countCard
+
+local countStroke = Instance.new("UIStroke")
+countStroke.Thickness = 1
+countStroke.Color = Colors.RedGlow
+countStroke.Transparency = 0.4
+countStroke.Parent = countCard
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(1, -12, 0, 20)
+countLabel.Position = UDim2.new(0, 8, 0, 6)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "⚡ SPAM COUNT"
+countLabel.TextColor3 = Colors.GrayLight
+countLabel.Font = Enum.Font.GothamBold
+countLabel.TextSize = 11
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Parent = countCard
+
+local countInput = Instance.new("TextBox")
+countInput.Size = UDim2.new(0.4, 0, 0, 32)
+countInput.Position = UDim2.new(0, 8, 0, 30)
+countInput.BackgroundColor3 = Colors.DarkerBg
+countInput.BackgroundTransparency = 0.3
+countInput.TextColor3 = Colors.White
+countInput.PlaceholderColor3 = Colors.GrayDark
+countInput.PlaceholderText = "Custom count..."
+countInput.Text = tostring(config.spamCount)
+countInput.Font = Enum.Font.Gotham
+countInput.TextSize = 11
+countInput.ClearTextOnFocus = false
+countInput.BorderSizePixel = 0
+countInput.Parent = countCard
+
+local countInputCorner = Instance.new("UICorner")
+countInputCorner.CornerRadius = UDim.new(0, 8)
+countInputCorner.Parent = countInput
+
+countInput.FocusLost:Connect(function()
+    local val = tonumber(countInput.Text)
+    if val and val > 0 then
+        config.spamCount = math.floor(val)
+        countInput.Text = tostring(config.spamCount)
+    else
+        countInput.Text = tostring(config.spamCount)
+    end
+end)
+
+-- PRESET SPAM COUNT
+local countPresetFrame = Instance.new("Frame")
+countPresetFrame.Size = UDim2.new(0.48, 0, 0, 32)
+countPresetFrame.Position = UDim2.new(0.5, 2, 0, 30)
+countPresetFrame.BackgroundTransparency = 1
+countPresetFrame.Parent = countCard
+
+local countPresets = {100, 200, 300, 500, 1000}
+for i, val in ipairs(countPresets) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.19, -2, 1, 0)
+    btn.Position = UDim2.new((i-1) * 0.2, 0, 0, 0)
+    btn.BackgroundColor3 = (val == config.spamCount) and Colors.RedDark or Colors.DarkerBg
+    btn.BackgroundTransparency = 0.3
+    btn.Text = tostring(val)
+    btn.TextColor3 = Colors.White
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.BorderSizePixel = 0
+    btn.Parent = countPresetFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+    
+    addHover(btn, Colors.RedDark)
+    
+    btn.MouseButton1Click:Connect(function()
+        config.spamCount = val
+        countInput.Text = tostring(val)
+        for _, child in ipairs(countPresetFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                TweenService:Create(child, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.DarkerBg}):Play()
+            end
+        end
+        TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedDark}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.05, Enum.EasingStyle.Quad), {Size = UDim2.new(0.19, -4, 1, 0)}):Play()
+        task.wait(0.05)
+        TweenService:Create(btn, TweenInfo.new(0.05, Enum.EasingStyle.Quad), {Size = UDim2.new(0.19, -2, 1, 0)}):Play()
+    end)
+end
+
+-- ===== DELAY (DENGAN PRESET) =====
+local delayCard = Instance.new("Frame")
+delayCard.Size = UDim2.new(0.95, 0, 0, 85)
+delayCard.BackgroundColor3 = Colors.CardBg
+delayCard.BackgroundTransparency = 0.2
+delayCard.BorderSizePixel = 0
+delayCard.Parent = contentFrame
+
+local delayCorner = Instance.new("UICorner")
+delayCorner.CornerRadius = UDim.new(0, 10)
+delayCorner.Parent = delayCard
+
+local delayStroke = Instance.new("UIStroke")
+delayStroke.Thickness = 1
+delayStroke.Color = Colors.RedGlow
+delayStroke.Transparency = 0.4
+delayStroke.Parent = delayCard
+
+local delayLabel = Instance.new("TextLabel")
+delayLabel.Size = UDim2.new(1, -12, 0, 20)
+delayLabel.Position = UDim2.new(0, 8, 0, 6)
+delayLabel.BackgroundTransparency = 1
+delayLabel.Text = "⏱️ DELAY (seconds)"
+delayLabel.TextColor3 = Colors.GrayLight
+delayLabel.Font = Enum.Font.GothamBold
+delayLabel.TextSize = 11
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+delayLabel.Parent = delayCard
+
+local delayInput = Instance.new("TextBox")
+delayInput.Size = UDim2.new(0.4, 0, 0, 32)
+delayInput.Position = UDim2.new(0, 8, 0, 30)
+delayInput.BackgroundColor3 = Colors.DarkerBg
+delayInput.BackgroundTransparency = 0.3
+delayInput.TextColor3 = Colors.White
+delayInput.PlaceholderColor3 = Colors.GrayDark
+delayInput.PlaceholderText = "Custom delay..."
+delayInput.Text = tostring(config.spamDelay)
+delayInput.Font = Enum.Font.Gotham
+delayInput.TextSize = 11
+delayInput.ClearTextOnFocus = false
+delayInput.BorderSizePixel = 0
+delayInput.Parent = delayCard
+
+local delayInputCorner = Instance.new("UICorner")
+delayInputCorner.CornerRadius = UDim.new(0, 8)
+delayInputCorner.Parent = delayInput
+
+delayInput.FocusLost:Connect(function()
+    local val = tonumber(delayInput.Text)
+    if val and val > 0 then
+        config.spamDelay = val
+        delayInput.Text = tostring(config.spamDelay)
+    else
+        delayInput.Text = tostring(config.spamDelay)
+    end
+end)
+
+-- PRESET DELAY
+local delayPresetFrame = Instance.new("Frame")
+delayPresetFrame.Size = UDim2.new(0.48, 0, 0, 32)
+delayPresetFrame.Position = UDim2.new(0.5, 2, 0, 30)
+delayPresetFrame.BackgroundTransparency = 1
+delayPresetFrame.Parent = delayCard
+
+local delayPresets = {0.01, 0.03, 0.05, 0.1, 0.2}
+for i, val in ipairs(delayPresets) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.19, -2, 1, 0)
+    btn.Position = UDim2.new((i-1) * 0.2, 0, 0, 0)
+    btn.BackgroundColor3 = (val == config.spamDelay) and Colors.RedDark or Colors.DarkerBg
+    btn.BackgroundTransparency = 0.3
+    btn.Text = val .. "s"
+    btn.TextColor3 = Colors.White
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 9
+    btn.BorderSizePixel = 0
+    btn.Parent = delayPresetFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+    
+    addHover(btn, Colors.RedDark)
+    
+    btn.MouseButton1Click:Connect(function()
+        config.spamDelay = val
+        delayInput.Text = tostring(val)
+        for _, child in ipairs(delayPresetFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                TweenService:Create(child, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.DarkerBg}):Play()
+            end
+        end
+        TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedDark}):Play()
+        TweenService:Create(btn, TweenInfo.new(0.05, Enum.EasingStyle.Quad), {Size = UDim2.new(0.19, -4, 1, 0)}):Play()
+        task.wait(0.05)
+        TweenService:Create(btn, TweenInfo.new(0.05, Enum.EasingStyle.Quad), {Size = UDim2.new(0.19, -2, 1, 0)}):Play()
+    end)
+end
+
+-- ===== BROADCAST TOGGLE =====
+local broadcastCard = Instance.new("Frame")
+broadcastCard.Size = UDim2.new(0.95, 0, 0, 75)
+broadcastCard.BackgroundColor3 = Colors.CardBg
+broadcastCard.BackgroundTransparency = 0.2
+broadcastCard.BorderSizePixel = 0
+broadcastCard.Parent = contentFrame
+
+local broadcastCorner = Instance.new("UICorner")
+broadcastCorner.CornerRadius = UDim.new(0, 10)
+broadcastCorner.Parent = broadcastCard
+
+local broadcastStroke = Instance.new("UIStroke")
+broadcastStroke.Thickness = 1
+broadcastStroke.Color = Colors.RedGlow
+broadcastStroke.Transparency = 0.4
+broadcastStroke.Parent = broadcastCard
+
+local broadcastLabel = Instance.new("TextLabel")
+broadcastLabel.Size = UDim2.new(1, -12, 0, 20)
+broadcastLabel.Position = UDim2.new(0, 8, 0, 6)
+broadcastLabel.BackgroundTransparency = 1
+broadcastLabel.Text = "📢 BROADCAST MODE"
+broadcastLabel.TextColor3 = Colors.GrayLight
+broadcastLabel.Font = Enum.Font.GothamBold
+broadcastLabel.TextSize = 11
+broadcastLabel.TextXAlignment = Enum.TextXAlignment.Left
+broadcastLabel.Parent = broadcastCard
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0.28, 0, 0, 30)
+toggleBtn.Position = UDim2.new(0.64, 0, 0, 30)
+toggleBtn.BackgroundColor3 = broadcastEnabled and Colors.RedDark or Colors.DarkerBg
+toggleBtn.BackgroundTransparency = 0.3
+toggleBtn.Text = broadcastEnabled and "ON" or "OFF"
+toggleBtn.TextColor3 = Colors.White
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 11
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Parent = broadcastCard
+
+local toggleCornerBtn = Instance.new("UICorner")
+toggleCornerBtn.CornerRadius = UDim.new(0, 8)
+toggleCornerBtn.Parent = toggleBtn
+
+addHover(toggleBtn, Colors.RedDark)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    broadcastEnabled = not broadcastEnabled
+    TweenService:Create(toggleBtn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = broadcastEnabled and Colors.RedDark or Colors.DarkerBg}):Play()
+    toggleBtn.Text = broadcastEnabled and "ON" or "OFF"
+end)
+
+local msgBox = Instance.new("TextBox")
+msgBox.Size = UDim2.new(0.55, 0, 0, 30)
+msgBox.Position = UDim2.new(0, 8, 0, 30)
+msgBox.BackgroundColor3 = Colors.DarkerBg
+msgBox.BackgroundTransparency = 0.3
+msgBox.TextColor3 = Colors.White
+msgBox.PlaceholderColor3 = Colors.GrayDark
+msgBox.PlaceholderText = "Broadcast message..."
+msgBox.Text = broadcastMessage
+msgBox.Font = Enum.Font.Gotham
+msgBox.TextSize = 10
+msgBox.ClearTextOnFocus = false
+msgBox.BorderSizePixel = 0
+msgBox.Parent = broadcastCard
+
+local msgBoxCorner = Instance.new("UICorner")
+msgBoxCorner.CornerRadius = UDim.new(0, 8)
+msgBoxCorner.Parent = msgBox
+
+msgBox.FocusLost:Connect(function()
+    if msgBox.Text ~= "" then
+        broadcastMessage = msgBox.Text
+    end
+end)
+
+-- ===== ACTION BUTTONS =====
+local function createActionButton(parent, y, icon, text, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.95, 0, 0, 40)
+    btn.Position = UDim2.new(0, 0, 0, y)
+    btn.BackgroundColor3 = color or Colors.DarkerBg
+    btn.BackgroundTransparency = 0.3
+    btn.Text = icon .. "  " .. text
+    btn.TextColor3 = Colors.White
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.BorderSizePixel = 0
+    btn.Parent = parent
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 10)
+    btnCorner.Parent = btn
+    
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedDark, Size = UDim2.new(0.96, 0, 0, 42)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = color or Colors.DarkerBg, Size = UDim2.new(0.95, 0, 0, 40)}):Play()
+    end)
+    
+    btn.MouseButton1Click:Connect(function()
+        pcall(callback)
+        TweenService:Create(btn, TweenInfo.new(0.06, Enum.EasingStyle.Quad), {Size = UDim2.new(0.93, 0, 0, 38)}):Play()
+        task.wait(0.06)
+        TweenService:Create(btn, TweenInfo.new(0.06, Enum.EasingStyle.Quad), {Size = UDim2.new(0.95, 0, 0, 40)}):Play()
+    end)
+    
+    return btn
+end
+
+createActionButton(contentFrame, 0, "🔍", "SCAN REMOTES", Colors.DarkerBg, function()
+    local found = scanAllRemotes()
+    remoteCountLabel.Text = #found
+    refreshRemoteList()
+    TweenService:Create(remoteCountLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.Green}):Play()
+    task.wait(0.2)
+    TweenService:Create(remoteCountLabel, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {TextColor3 = Colors.RedBright}):Play()
+end)
+
+createActionButton(contentFrame, 46, "💥", "SPAM ALL", Colors.RedDark, function()
+    spamOnce()
+end)
+
+createActionButton(contentFrame, 92, "⏹️", "STOP ALL", Colors.DarkerBg, function()
+    stopAllSpam()
+end)
+
+autoSpamButton = Instance.new("TextButton")
+autoSpamButton.Size = UDim2.new(0.95, 0, 0, 40)
+autoSpamButton.Position = UDim2.new(0, 0, 0, 138)
+autoSpamButton.BackgroundColor3 = Colors.RedDark
+autoSpamButton.BackgroundTransparency = 0.3
+autoSpamButton.Text = "🔄 AUTO SPAM"
+autoSpamButton.TextColor3 = Colors.White
+autoSpamButton.Font = Enum.Font.GothamBold
+autoSpamButton.TextSize = 11
+autoSpamButton.BorderSizePixel = 0
+autoSpamButton.Parent = contentFrame
+
+local autoBtnCorner = Instance.new("UICorner")
+autoBtnCorner.CornerRadius = UDim.new(0, 10)
+autoBtnCorner.Parent = autoSpamButton
+
+autoSpamButton.MouseEnter:Connect(function()
+    TweenService:Create(autoSpamButton, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedBright, Size = UDim2.new(0.96, 0, 0, 42)}):Play()
+end)
+autoSpamButton.MouseLeave:Connect(function()
+    local targetColor = autoSpamEnabled and Colors.RedBright or Colors.RedDark
+    TweenService:Create(autoSpamButton, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundColor3 = targetColor, Size = UDim2.new(0.95, 0, 0, 40)}):Play()
+end)
+
+autoSpamButton.MouseButton1Click:Connect(function()
+    if #remoteEvents == 0 then
+        showNotification("❌ ERROR", "Scan remote dulu!", true)
+        return
+    end
+    toggleAutoSpam()
+    if autoSpamEnabled then
+        TweenService:Create(autoSpamButton, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedBright}):Play()
+        autoSpamButton.Text = "⏹️ AUTO SPAM ON"
+    else
+        TweenService:Create(autoSpamButton, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundColor3 = Colors.RedDark}):Play()
+        autoSpamButton.Text = "🔄 AUTO SPAM"
+    end
+end)
+
+-- ===== REMOTE LIST =====
+local listCard = Instance.new("Frame")
+listCard.Size = UDim2.new(0.95, 0, 0, 120)
+listCard.Position = UDim2.new(0, 0, 0, 186)
+listCard.BackgroundColor3 = Colors.CardBg
+listCard.BackgroundTransparency = 0.2
+listCard.BorderSizePixel = 0
+listCard.Parent = contentFrame
+
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 10)
+listCorner.Parent = listCard
+
+local listStroke = Instance.new("UIStroke")
+listStroke.Thickness = 1
+listStroke.Color = Colors.RedGlow
+listStroke.Transparency = 0.4
+listStroke.Parent = listCard
+
+local listHeaderLabel = Instance.new("TextLabel")
+listHeaderLabel.Size = UDim2.new(1, -12, 0, 20)
+listHeaderLabel.Position = UDim2.new(0, 8, 0, 6)
+listHeaderLabel.BackgroundTransparency = 1
+listHeaderLabel.Text = "📡 REMOTE EVENTS"
+listHeaderLabel.TextColor3 = Colors.GrayLight
+listHeaderLabel.Font = Enum.Font.GothamBold
+listHeaderLabel.TextSize = 10
+listHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+listHeaderLabel.Parent = listCard
+
+local remoteListFrame = Instance.new("ScrollingFrame")
+remoteListFrame.Size = UDim2.new(1, -12, 0, 85)
+remoteListFrame.Position = UDim2.new(0, 6, 0, 28)
+remoteListFrame.BackgroundTransparency = 1
+remoteListFrame.ScrollBarThickness = 2
+remoteListFrame.ScrollBarImageColor3 = Colors.RedGlow
+remoteListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+remoteListFrame.Parent = listCard
+
+local remoteLayout = Instance.new("UIListLayout")
+remoteLayout.Padding = UDim.new(0, 3)
+remoteLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+remoteLayout.Parent = remoteListFrame
+
+function refreshRemoteList()
+    for _, child in ipairs(remoteListFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    if #remoteEvents == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Size = UDim2.new(1, 0, 0, 20)
+        empty.BackgroundTransparency = 1
+        empty.Text = "No RemoteEvents found. Press SCAN!"
+        empty.TextColor3 = Colors.GrayDark
+        empty.Font = Enum.Font.Gotham
+        empty.TextSize = 9
+        empty.Parent = remoteListFrame
+        remoteListFrame.CanvasSize = UDim2.new(0, 0, 0, 25)
+        return
+    end
+    
+    for i, remote in ipairs(remoteEvents) do
+        local item = Instance.new("TextButton")
+        item.Size = UDim2.new(1, -10, 0, 18)
+        item.BackgroundTransparency = 1
+        item.Text = (remote.active and "🟢 " or "🔴 ") .. remote.name
+        item.TextColor3 = remote.active and Colors.GreenBright or Colors.GrayDark
+        item.Font = Enum.Font.Gotham
+        item.TextSize = 9
+        item.TextXAlignment = Enum.TextXAlignment.Left
+        item.Parent = remoteListFrame
+        
+        item.MouseButton1Click:Connect(function()
+            remote.active = not remote.active
+            item.Text = (remote.active and "🟢 " or "🔴 ") .. remote.name
+            item.TextColor3 = remote.active and Colors.GreenBright or Colors.GrayDark
+            TweenService:Create(item, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {TextColor3 = remote.active and Colors.GreenBright or Colors.GrayDark}):Play()
+            showNotification("📡 REMOTE", remote.name .. " " .. (remote.active and "ENABLED" or "DISABLED"))
+        end)
+    end
+    
+    remoteListFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(#remoteEvents * 20, 100))
+end
+
+-- ===== UI UPDATE LOOP =====
+task.spawn(function()
+    while screenGui and screenGui.Parent do
+        if autoSpamEnabled then
+            rpsLabel.Text = string.format("RPS: %.0f | PEAK: %.0f", performance.currentRPS, performance.peakRPS)
+        else
+            rpsLabel.Text = "RPS: 0 | PEAK: " .. math.floor(performance.peakRPS)
+        end
+        task.wait(0.15)
+    end
+end)
+
+-- ===== MINIMIZE =====
+local minimized = false
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 320, 0, 52)}):Play()
+        contentFrame.Visible = false
+        divider.Visible = false
+        minBtn.Text = "+"
+    else
+        contentFrame.Visible = true
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Size = UDim2.new(0, 320, 0, 500)}):Play()
+        divider.Visible = true
+        minBtn.Text = "−"
+    end
+end)
+
+-- ===== DRAG =====
+local dragging = false
+local dragStart, startPos
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+mainFrame.InputEnded:Connect(function()
+    dragging = false
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- ===== INSERT TOGGLE =====
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        screenGui.Enabled = not screenGui.Enabled
+    end
+end)
+
+-- ===== ANTI-KICK =====
+player.OnKick:Connect(function()
+    if config.backupServers[1] then
+        task.wait(2)
+        TeleportService:Teleport(game.PlaceId)
+    end
+end)
+
+-- ===== INIT =====
+task.wait(1)
+scanAllRemotes()
+refreshRemoteList()
+remoteCountLabel.Text = #remoteEvents
+
+showNotification("🔥 IYANXCODE BRUTAL", "Ultra Smooth | Preset Count & Delay")
+
+print("✅ IYANXCODE BRUTAL FIRE - ULTRA SMOOTH")
+print("🔥 Preset Spam Count: 100,200,300,500,1000")
+print("🔥 Preset Delay: 0.01s,0.03s,0.05s,0.1s,0.2s")
+print("📌 Press INSERT to toggle UI")
