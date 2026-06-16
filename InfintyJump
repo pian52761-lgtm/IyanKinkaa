@@ -1,0 +1,494 @@
+-- =====================================================
+-- 🦘 INFINITY JUMP BY IYANKINKA (GUI FINAL + KEY SYSTEM)
+-- Toggle ON / OFF
+-- Status Indicator
+-- Minimize + Close Button
+-- Dragable (Mobile + PC)
+-- KEY SYSTEM ACTIVATION
+-- =====================================================
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+task.wait(1)
+
+-- ================= SERVICES =================
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ================= KEY SYSTEM CONFIG =================
+local KEY_CONFIG = {
+    encryption_key = "YTTA_INFINITY_2026",
+    license_file = "infinity_license.ytkey",
+    max_activations = 1,
+    trial_days = 3
+}
+
+-- ================= KEY SYSTEM FUNCTIONS =================
+local function xor_encrypt(data, key)
+    local encrypted = ""
+    for i = 1, #data do
+        local char_code = string.byte(data, i)
+        local key_char = string.byte(key, ((i - 1) % #key) + 1)
+        encrypted = encrypted .. string.char(bit32.bxor(char_code, key_char))
+    end
+    return encrypted
+end
+
+local function xor_decrypt(encrypted, key)
+    return xor_encrypt(encrypted, key)
+end
+
+local function generate_hwid()
+    local hwid_parts = {}
+    
+    -- Get executor HWID
+    local success, hwid = pcall(function()
+        if syn and syn.crypt then
+            return syn.crypt.hwid()
+        elseif getexecutorname then
+            return getexecutorname() .. os.time()
+        else
+            return tostring(os.time())
+        end
+    end)
+    
+    if success and hwid then
+        table.insert(hwid_parts, tostring(hwid))
+    end
+    
+    -- Get machine info
+    local success, info = pcall(function()
+        return HttpService:JSONEncode({
+            os = tostring(os.time()),
+            guid = tostring(HttpService:GenerateGUID(false))
+        })
+    end)
+    
+    if success and info then
+        table.insert(hwid_parts, info)
+    end
+    
+    local raw = table.concat(hwid_parts, "|")
+    return HttpService:SHA256(raw)
+end
+
+local function load_license()
+    local success, data = pcall(function()
+        return readfile(KEY_CONFIG.license_file)
+    end)
+    
+    if success and data then
+        local decrypted = xor_decrypt(data, KEY_CONFIG.encryption_key)
+        return HttpService:JSONDecode(decrypted)
+    end
+    return nil
+end
+
+local function save_license(license_data)
+    local json = HttpService:JSONEncode(license_data)
+    local encrypted = xor_encrypt(json, KEY_CONFIG.encryption_key)
+    writefile(KEY_CONFIG.license_file, encrypted)
+end
+
+local function validate_license()
+    local license = load_license()
+    if not license then
+        return false, "No license found"
+    end
+    
+    local hwid = generate_hwid()
+    
+    -- Check HWID
+    if license.hwid ~= hwid then
+        return false, "HWID mismatch"
+    end
+    
+    -- Check expiry
+    if os.time() > license.expiry then
+        return false, "License expired"
+    end
+    
+    -- Check activations
+    if license.activations > license.max_activations then
+        return false, "Max activations reached"
+    end
+    
+    return true, "License valid"
+end
+
+local function activate_trial()
+    local hwid = generate_hwid()
+    local trial_data = {
+        type = "trial",
+        created = os.time(),
+        expiry = os.time() + (KEY_CONFIG.trial_days * 86400),
+        hwid = hwid,
+        activations = 1,
+        max_activations = KEY_CONFIG.max_activations,
+        features = {
+            jump = true
+        }
+    }
+    save_license(trial_data)
+    return trial_data
+end
+
+local function activate_key(key)
+    -- Validasi key langsung tanpa hash
+    local key_trimmed = string.gsub(key, "%s+", "") -- Remove whitespace
+    
+    -- Premium key: IYANXCODE
+    -- Trial key: IYANKINKA
+    local key_data = nil
+    
+    if key_trimmed == "IYANXCODE" then
+        key_data = {
+            type = "premium",
+            duration = 365
+        }
+    elseif key_trimmed == "IYANKINKA" then
+        key_data = {
+            type = "trial",
+            duration = 7
+        }
+    end
+    
+    if key_data then
+        local hwid = generate_hwid()
+        local license_data = {
+            type = key_data.type,
+            created = os.time(),
+            expiry = os.time() + (key_data.duration * 86400),
+            hwid = hwid,
+            activations = 1,
+            max_activations = KEY_CONFIG.max_activations,
+            features = {
+                jump = true
+            }
+        }
+        save_license(license_data)
+        return true, "License activated successfully! (" .. key_data.type .. ")"
+    end
+    
+    return false, "Invalid key!"
+end
+
+-- ================= INIT KEY SYSTEM =================
+local is_licensed = false
+local license_status = "Not Activated"
+
+local function check_license_status()
+    local valid, msg = validate_license()
+    is_licensed = valid
+    license_status = valid and "✅ Activated" or "❌ " .. msg
+    return is_licensed
+end
+
+-- Try to load existing license
+check_license_status()
+
+-- If no license, activate trial
+if not is_licensed then
+    local trial = activate_trial()
+    check_license_status()
+end
+
+-- ================= GLOBAL STATE =================
+if _G.InfiniteJumpActive == nil then
+    _G.InfiniteJumpActive = false
+    _G.JumpConnection = nil
+    _G.JumpVelocity = nil
+    _G.JumpHeight = 50
+end
+
+-- ================= INFINITE JUMP SYSTEM =================
+local function EnableInfiniteJump()
+    if not is_licensed then
+        print("❌ License required to use Infinity Jump!")
+        return false
+    end
+    
+    if _G.InfiniteJumpActive then return end
+    _G.InfiniteJumpActive = true
+
+    local function OnJumpRequest()
+        if not _G.InfiniteJumpActive then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+
+        if hum and root then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+            if _G.JumpVelocity then
+                _G.JumpVelocity:Destroy()
+            end
+
+            _G.JumpVelocity = Instance.new("BodyVelocity")
+            _G.JumpVelocity.Velocity = Vector3.new(0, _G.JumpHeight, 0)
+            _G.JumpVelocity.MaxForce = Vector3.new(0, 40000, 0)
+            _G.JumpVelocity.Parent = root
+
+            task.wait(0.15)
+            if _G.JumpVelocity then
+                _G.JumpVelocity:Destroy()
+                _G.JumpVelocity = nil
+            end
+        end
+    end
+
+    if _G.JumpConnection then
+        _G.JumpConnection:Disconnect()
+    end
+    _G.JumpConnection = UserInputService.JumpRequest:Connect(OnJumpRequest)
+    return true
+end
+
+local function DisableInfiniteJump()
+    if not _G.InfiniteJumpActive then return end
+    _G.InfiniteJumpActive = false
+
+    if _G.JumpConnection then
+        _G.JumpConnection:Disconnect()
+        _G.JumpConnection = nil
+    end
+
+    if _G.JumpVelocity then
+        _G.JumpVelocity:Destroy()
+        _G.JumpVelocity = nil
+    end
+end
+
+local function ToggleJump()
+    if _G.InfiniteJumpActive then
+        DisableInfiniteJump()
+    else
+        EnableInfiniteJump()
+    end
+end
+
+-- ================= GUI =================
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+if PlayerGui:FindFirstChild("InfinityJumpGUI") then
+    PlayerGui.InfinityJumpGUI:Destroy()
+end
+
+local gui = Instance.new("ScreenGui", PlayerGui)
+gui.Name = "InfinityJumpGUI"
+gui.ResetOnSpawn = false
+
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 280, 0, 200)
+main.Position = UDim2.new(0.5, -140, 0.35, 0)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+main.Active = true
+main.Draggable = true
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+-- ================= TOP BAR =================
+local top = Instance.new("Frame", main)
+top.Size = UDim2.new(1, 0, 0, 35)
+top.BackgroundTransparency = 1
+
+-- TITLE
+local title = Instance.new("TextLabel", top)
+title.Size = UDim2.new(1, -80, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "INFINITY JUMP"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.fromRGB(0, 170, 255)
+
+-- MINIMIZE BUTTON
+local minimize = Instance.new("TextButton", top)
+minimize.Size = UDim2.new(0, 30, 0, 25)
+minimize.Position = UDim2.new(1, -70, 0.5, -12)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBold
+minimize.TextSize = 20
+minimize.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+minimize.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 6)
+
+-- CLOSE BUTTON
+local close = Instance.new("TextButton", top)
+close.Size = UDim2.new(0, 30, 0, 25)
+close.Position = UDim2.new(1, -35, 0.5, -12)
+close.Text = "X"
+close.Font = Enum.Font.GothamBold
+close.TextSize = 14
+close.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+close.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
+
+-- ================= CONTENT =================
+local content = Instance.new("Frame", main)
+content.Size = UDim2.new(1, 0, 1, -35)
+content.Position = UDim2.new(0, 0, 0, 35)
+content.BackgroundTransparency = 1
+
+-- LICENSE STATUS
+local license_status_label = Instance.new("TextLabel", content)
+license_status_label.Size = UDim2.new(1, 0, 0, 20)
+license_status_label.Position = UDim2.new(0, 0, 0, 5)
+license_status_label.BackgroundTransparency = 1
+license_status_label.Font = Enum.Font.Gotham
+license_status_label.TextSize = 12
+license_status_label.Text = "License: " .. license_status
+license_status_label.TextColor3 = is_licensed and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 80, 80)
+
+-- KEY INPUT
+local key_input = Instance.new("TextBox", content)
+key_input.Size = UDim2.new(0.7, 0, 0, 30)
+key_input.Position = UDim2.new(0.05, 0, 0, 30)
+key_input.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+key_input.BorderSizePixel = 0
+key_input.PlaceholderText = "Enter activation key"
+key_input.TextColor3 = Color3.new(1,1,1)
+key_input.TextSize = 12
+key_input.Font = Enum.Font.Gotham
+Instance.new("UICorner", key_input).CornerRadius = UDim.new(0, 6)
+
+-- ACTIVATE BUTTON
+local activate_btn = Instance.new("TextButton", content)
+activate_btn.Size = UDim2.new(0.2, 0, 0, 30)
+activate_btn.Position = UDim2.new(0.77, 0, 0, 30)
+activate_btn.Text = "ACTIVATE"
+activate_btn.Font = Enum.Font.GothamBold
+activate_btn.TextSize = 11
+activate_btn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+activate_btn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", activate_btn).CornerRadius = UDim.new(0, 6)
+
+-- STATUS
+local status = Instance.new("TextLabel", content)
+status.Size = UDim2.new(1, 0, 0, 30)
+status.Position = UDim2.new(0, 0, 0, 70)
+status.BackgroundTransparency = 1
+status.Font = Enum.Font.Gotham
+status.TextSize = 14
+status.Text = "Jump Status : OFF"
+status.TextColor3 = Color3.fromRGB(255, 80, 80)
+
+-- TOGGLE
+local toggle = Instance.new("TextButton", content)
+toggle.Size = UDim2.new(0, 200, 0, 40)
+toggle.Position = UDim2.new(0.5, -100, 1, -55)
+toggle.Text = "TURN ON"
+toggle.Font = Enum.Font.GothamBold
+toggle.TextSize = 14
+toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+toggle.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 10)
+
+-- ================= LOGIC =================
+local minimized = false
+
+local function UpdateGUI()
+    -- Update license status
+    check_license_status()
+    license_status_label.Text = "License: " .. license_status
+    license_status_label.TextColor3 = is_licensed and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 80, 80)
+    
+    -- Update jump status
+    if _G.InfiniteJumpActive then
+        status.Text = "Jump Status : ON"
+        status.TextColor3 = Color3.fromRGB(0, 255, 120)
+        toggle.Text = "TURN OFF"
+        toggle.BackgroundColor3 = Color3.fromRGB(0, 140, 80)
+    else
+        status.Text = "Jump Status : OFF"
+        status.TextColor3 = Color3.fromRGB(255, 80, 80)
+        toggle.Text = "TURN ON"
+        toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+    end
+    
+    -- Disable toggle if not licensed
+    toggle.Visible = is_licensed
+    if not is_licensed then
+        toggle.Text = "🔒 LOCKED"
+        toggle.BackgroundColor3 = Color3.fromRGB(100, 50, 50)
+    end
+end
+
+-- Toggle jump
+toggle.MouseButton1Click:Connect(function()
+    if not is_licensed then
+        print("❌ License required!")
+        return
+    end
+    ToggleJump()
+    UpdateGUI()
+end)
+
+-- Activate key
+activate_btn.MouseButton1Click:Connect(function()
+    local key = key_input.Text
+    if key and key ~= "" then
+        local success, msg = activate_key(key)
+        if success then
+            check_license_status()
+            UpdateGUI()
+            key_input.Text = ""
+            key_input.PlaceholderText = "✅ Activated!"
+            license_status_label.Text = "License: ✅ Activated"
+            license_status_label.TextColor3 = Color3.fromRGB(0, 255, 120)
+            
+            -- Auto-enable jump
+            EnableInfiniteJump()
+            UpdateGUI()
+        else
+            license_status_label.Text = "License: ❌ " .. msg
+            license_status_label.TextColor3 = Color3.fromRGB(255, 80, 80)
+            key_input.Text = ""
+            key_input.PlaceholderText = "Invalid key!"
+        end
+    end
+end)
+
+-- Minimize
+minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    main.Size = minimized and UDim2.new(0, 280, 0, 35) or UDim2.new(0, 280, 0, 200)
+    minimize.Text = minimized and "+" or "-"
+end)
+
+-- Close
+close.MouseButton1Click:Connect(function()
+    DisableInfiniteJump()
+    gui:Destroy()
+end)
+
+-- Character respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if _G.InfiniteJumpActive and is_licensed then
+        EnableInfiniteJump()
+    end
+end)
+
+-- Auto-enable if already activated and licensed
+if is_licensed then
+    EnableInfiniteJump()
+end
+
+UpdateGUI()
+
+print("🦘 INFINITY JUMP BY IYANKINKA | KEY SYSTEM LOADED")
+print("📌 License Status: " .. license_status)
+print("🔑 Premium Key: IYANXCODE")
+print("🔑 Trial Key: IYANKINKA")
+
+-- =====================================================
+-- USAGE:
+-- 
+-- Premium Key: IYANXCODE (365 days)
+-- Trial Key: IYANKINKA (7 days)
+-- =====================================================
