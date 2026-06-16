@@ -1,0 +1,326 @@
+--[[
+    deobfuscated by IyanXCode
+    IyanXCode | github.com/iyanxcode
+]]
+
+-- Load UI Library
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nearastro/Nearastro/refs/heads/main/MyUiLib.lua"))()
+
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Variables
+local selectedPlayer = nil
+local isSpectating = false
+local originalCameraSubject = nil
+local currentCharacter = nil
+
+-- Remote Events
+local BloxbizRemotes = ReplicatedStorage:WaitForChild("BloxbizRemotes")
+local CatalogOnApplyOutfit = BloxbizRemotes:WaitForChild("CatalogOnApplyOutfit")
+
+-- Function to update character reference
+local function updateCharacter()
+    currentCharacter = LocalPlayer.Character
+end
+
+-- Initial character check
+updateCharacter()
+
+-- Listen for character changes
+LocalPlayer.CharacterAdded:Connect(updateCharacter)
+
+-- Function to get player list
+local function getPlayerList()
+    local players = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(players, player.Name)
+        end
+    end
+    if #players > 0 then
+        return players
+    else
+        return {"No players"}
+    end
+end
+
+-- Create UI Window
+local Window = UI:Window({
+    Title = "IyanXCode » Cabin Indo",
+    Desc = "By IyanXCode",
+    Icon = "🍁",
+    Theme = "Dark",
+    Config = {
+        Keybind = Enum.KeyCode.G,
+        Size = UDim2.new(0, 580, 0, 400)
+    },
+    CloseUIButton = {
+        Enabled = true,
+        Text = "IyanXCode"
+    }
+})
+
+-- Player Tab
+local PlayerTab = Window:Tab({
+    Title = "Player",
+    Icon = "users"
+})
+
+PlayerTab:Section({
+    Title = "Player Features"
+})
+
+-- Player Dropdown
+local playerDropdown = PlayerTab:Dropdown({
+    Title = "Select Player",
+    List = getPlayerList(),
+    Value = getPlayerList()[1],
+    Callback = function(value)
+        selectedPlayer = value
+    end
+})
+
+-- Refresh Button
+PlayerTab:Button({
+    Title = "Refresh Player List",
+    Desc = "Update player list in dropdown",
+    Callback = function()
+        local newList = getPlayerList()
+        playerDropdown:SetList(newList)
+        playerDropdown:SetValue(newList[1] or "No players")
+        selectedPlayer = newList[1]
+        Window:Notify({
+            Title = "Refreshed",
+            Desc = "Player list updated.",
+            Time = 3
+        })
+    end
+})
+
+-- Function to apply avatar description
+local function applyAvatarDescription(targetPlayer, description)
+    if not description then
+        Window:Notify({
+            Title = "Error",
+            Desc = "Invalid avatar description.",
+            Time = 3
+        })
+        return
+    end
+    
+    local accessories = {}
+    
+    -- Get accessories from description
+    pcall(function()
+        for _, accessory in ipairs(description:GetAccessories(true)) do
+            table.insert(accessories, {
+                AccessoryType = accessory.AccessoryType,
+                AssetId = accessory.AssetId,
+                Order = accessory.Order,
+                Puffiness = accessory.Puffiness
+            })
+        end
+    end)
+    
+    -- Prepare outfit data
+    local outfitData = {{
+        Accessories = accessories,
+        BodyTypeScale = description.BodyTypeScale,
+        HeadScale = description.HeadScale,
+        ProportionScale = description.ProportionScale,
+        Face = description.Face,
+        GraphicTShirt = description.GraphicTShirt,
+        Head = description.Head,
+        HeadColor = description.HeadColor,
+        HeightScale = description.HeightScale,
+        LeftArm = description.LeftArm,
+        LeftArmColor = description.LeftArmColor,
+        LeftLeg = description.LeftLeg,
+        LeftLegColor = description.LeftLegColor,
+        Pants = description.Pants,
+        RightArm = description.RightArm,
+        RightArmColor = description.RightArmColor,
+        RightLeg = description.RightLeg,
+        RightLegColor = description.RightLegColor,
+        Shirt = description.Shirt,
+        Torso = description.Torso,
+        TorsoColor = description.TorsoColor,
+        WidthScale = description.WidthScale,
+        DepthScale = description.DepthScale,
+        ClimbAnimation = description.ClimbAnimation,
+        FallAnimation = description.FallAnimation,
+        IdleAnimation = description.IdleAnimation,
+        JumpAnimation = description.JumpAnimation,
+        RunAnimation = description.RunAnimation,
+        SwimAnimation = description.SwimAnimation,
+        WalkAnimation = description.WalkAnimation
+    }}
+    
+    -- Fire remote to apply outfit
+    pcall(function()
+        CatalogOnApplyOutfit:FireServer(unpack(outfitData))
+    end)
+end
+
+-- Copy Avatar Button
+PlayerTab:Button({
+    Title = "Copy & Apply Avatar",
+    Desc = "Copy avatar from selected player",
+    Callback = function()
+        if not selectedPlayer or selectedPlayer == "No players" then
+            Window:Notify({
+                Title = "Error",
+                Desc = "Select a valid player.",
+                Time = 3
+            })
+            return
+        end
+        
+        local targetPlayer = Players:FindFirstChild(selectedPlayer)
+        if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            Window:Notify({
+                Title = "Error",
+                Desc = "Player or character not found.",
+                Time = 3
+            })
+            return
+        end
+        
+        local targetHumanoid = targetPlayer.Character.Humanoid
+        
+        local success, description = pcall(function()
+            return targetHumanoid:GetAppliedDescription()
+        end)
+        
+        if success and description then
+            applyAvatarDescription(targetPlayer, description)
+            Window:Notify({
+                Title = "Success",
+                Desc = "Avatar copied from " .. targetPlayer.Name,
+                Time = 3
+            })
+        else
+            Window:Notify({
+                Title = "Error",
+                Desc = "Failed to get player avatar data.",
+                Time = 3
+            })
+        end
+    end
+})
+
+-- Reset Avatar Button
+PlayerTab:Button({
+    Title = "Reset to Default Avatar",
+    Desc = "Reset your avatar to default",
+    Callback = function()
+        local success, defaultDescription = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(LocalPlayer.UserId)
+        end)
+        
+        if success and defaultDescription then
+            applyAvatarDescription(LocalPlayer, defaultDescription)
+            Window:Notify({
+                Title = "Success",
+                Desc = "Avatar reset to default.",
+                Time = 3
+            })
+        else
+            Window:Notify({
+                Title = "Error",
+                Desc = "Failed to load default avatar.",
+                Time = 3
+            })
+        end
+    end
+})
+
+-- Teleport Button
+PlayerTab:Button({
+    Title = "Teleport to Player",
+    Desc = "Teleport to selected player",
+    Callback = function()
+        local targetPlayer = Players:FindFirstChild(selectedPlayer)
+        if targetPlayer and targetPlayer ~= LocalPlayer and targetPlayer.Character and LocalPlayer.Character then
+            local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local localHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetHRP and localHRP then
+                localHRP.CFrame = targetHRP.CFrame
+                Window:Notify({
+                    Title = "Teleported",
+                    Desc = "Moved to " .. targetPlayer.Name,
+                    Time = 3
+                })
+            end
+        else
+            Window:Notify({
+                Title = "Error",
+                Desc = "Cannot teleport to target.",
+                Time = 3
+            })
+        end
+    end
+})
+
+-- Spectate Button
+local isViewing = false
+local lastCameraSubject = nil
+
+PlayerTab:Button({
+    Title = "View / Unview Player",
+    Desc = "Spectate selected player camera",
+    Callback = function()
+        if isViewing then
+            -- Stop spectating
+            if lastCameraSubject then
+                Camera.CameraSubject = lastCameraSubject
+            end
+            isViewing = false
+            Window:Notify({
+                Title = "Unviewed",
+                Desc = "Camera returned to normal.",
+                Time = 3
+            })
+        else
+            -- Start spectating
+            if not selectedPlayer or selectedPlayer == "No players" then
+                Window:Notify({
+                    Title = "View Error",
+                    Desc = "Select a valid target.",
+                    Time = 3
+                })
+                return
+            end
+            
+            local targetPlayer = Players:FindFirstChild(selectedPlayer)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                lastCameraSubject = Camera.CameraSubject
+                Camera.CameraSubject = targetPlayer.Character.Humanoid
+                isViewing = true
+                Window:Notify({
+                    Title = "Viewing",
+                    Desc = "Now watching " .. targetPlayer.Name,
+                    Time = 3
+                })
+            else
+                Window:Notify({
+                    Title = "View Error",
+                    Desc = "Target not found or has no character.",
+                    Time = 3
+                })
+            end
+        end
+    end
+})
+
+-- Anti-AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0, 0))
+    task.wait(0.1)
+    VirtualUser:Button2Up(Vector2.new(0, 0))
+end)
