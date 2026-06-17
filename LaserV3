@@ -1,0 +1,1031 @@
+--[[
+    IYANXCODE GLITCHER v1
+    Clean & Fixed Version
+    Features: Animation Glitch, Spin, Swim, Fly, Noclip, Rainbow, /RE
+]]
+
+-- ============================================================
+-- SERVICES
+-- ============================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local Animator = Humanoid:WaitForChild("Animator")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- ============================================================
+-- THEME COLORS
+-- ============================================================
+local Theme = {
+    Background = Color3.fromRGB(22, 22, 28),
+    Surface = Color3.fromRGB(32, 32, 40),
+    Elevated = Color3.fromRGB(42, 42, 52),
+    Primary = Color3.fromRGB(86, 125, 143),
+    Secondary = Color3.fromRGB(72, 187, 204),
+    Accent = Color3.fromRGB(120, 160, 180),
+    TextPrimary = Color3.fromRGB(240, 240, 245),
+    TextSecondary = Color3.fromRGB(180, 180, 190),
+    TextMuted = Color3.fromRGB(120, 120, 130),
+    Success = Color3.fromRGB(72, 160, 120),
+    Danger = Color3.fromRGB(200, 80, 80),
+    Warning = Color3.fromRGB(200, 160, 80)
+}
+
+-- ============================================================
+-- CONFIGURATION
+-- ============================================================
+local Config = {
+    Active = false,
+    Mode = 1,
+    Speed = 1,
+    AnimTrack1 = nil,
+    AnimTrack2 = nil,
+    SpinConnection = nil,
+    SwimConnection = nil,
+    FlyEnabled = false,
+    FlyBodyVel = nil,
+    FlyBodyGyro = nil,
+    RainbowConnection = nil,
+    Minimized = false,
+    NoclipEnabled = false,
+    NoclipConnection = nil
+}
+
+-- ============================================================
+-- ANIMATION MODES (LASERV3)
+-- ============================================================
+local AnimationModes = {
+    { name = "LASERV3", id1 = "70883871260184", id2 = nil }
+}
+
+-- ============================================================
+-- HELPER FUNCTIONS
+-- ============================================================
+local function getCoreGui()
+    return (gethui and gethui()) or CoreGui
+end
+
+local function showNotification(title, message, duration)
+    duration = duration or 2
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "IYANXCODE_Notif_" .. math.random(1000, 9999)
+    gui.Parent = getCoreGui()
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 260, 0, 65)
+    frame.Position = UDim2.new(1, 280, 0.85, 0)
+    frame.BackgroundColor3 = Theme.Surface
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Theme.Primary
+    stroke.Thickness = 1.5
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 20)
+    titleLabel.Position = UDim2.new(0, 10, 0, 8)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 12
+    titleLabel.TextColor3 = Theme.Secondary
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = frame
+
+    local msgLabel = Instance.new("TextLabel")
+    msgLabel.Size = UDim2.new(1, -20, 0, 28)
+    msgLabel.Position = UDim2.new(0, 10, 0, 30)
+    msgLabel.BackgroundTransparency = 1
+    msgLabel.Text = message
+    msgLabel.Font = Enum.Font.GothamMedium
+    msgLabel.TextSize = 11
+    msgLabel.TextColor3 = Theme.TextSecondary
+    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+    msgLabel.TextWrapped = true
+    msgLabel.Parent = frame
+
+    TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+        Position = UDim2.new(1, -280, 0.85, 0)
+    }):Play()
+
+    task.delay(duration, function()
+        TweenService:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(1, 280, 0.85, 0)
+        }):Play()
+        task.wait(0.5)
+        gui:Destroy()
+    end)
+end
+
+-- ============================================================
+-- ANIMATION FUNCTIONS
+-- ============================================================
+local function loadAnimation(animId)
+    local success, asset = pcall(function()
+        return game:GetObjects("rbxassetid://" .. animId)[1]
+    end)
+
+    if not success or not asset then
+        local insertService = game:GetService("InsertService")
+        success, asset = pcall(function()
+            return insertService:LoadAsset(animId)
+        end)
+    end
+
+    if success and asset then
+        local animation = asset:FindFirstChildWhichIsA("Animation")
+        if animation then
+            return animation
+        end
+    end
+
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://" .. animId
+    return anim
+end
+
+local function playAnimation(animId, priority, speed)
+    if not Animator then
+        Animator = Instance.new("Animator")
+        Animator.Parent = Humanoid
+    end
+
+    local animation = loadAnimation(animId)
+    if not animation then return nil end
+
+    local track = Animator:LoadAnimation(animation)
+    track.Priority = (priority == "Action4") and Enum.AnimationPriority.Action4 or Enum.AnimationPriority.Action3
+    track:Play(0.1, 1, speed or Config.Speed)
+    return track
+end
+
+local function stopAnimations()
+    if Config.AnimTrack1 then
+        pcall(function() Config.AnimTrack1:Stop(0.1) end)
+        Config.AnimTrack1 = nil
+    end
+    if Config.AnimTrack2 then
+        pcall(function() Config.AnimTrack2:Stop(0.1) end)
+        Config.AnimTrack2 = nil
+    end
+end
+
+-- ============================================================
+-- GLITCH FUNCTIONS
+-- ============================================================
+local function startGlitch()
+    if Config.Active then return end
+
+    local mode = AnimationModes[Config.Mode]
+    if not mode then return end
+
+    Config.Active = true
+
+    if mode.id1 then
+        Config.AnimTrack1 = playAnimation(mode.id1, "Action4", Config.Speed)
+    end
+    if mode.id2 then
+        Config.AnimTrack2 = playAnimation(mode.id2, "Action3", Config.Speed)
+    end
+
+    showNotification("IYANXCODE", mode.name .. " AKTIF!", 2)
+end
+
+local function stopGlitch()
+    if not Config.Active then return end
+
+    Config.Active = false
+    stopAnimations()
+    Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    showNotification("IYANXCODE", "GLITCH DIMATIKAN", 2)
+end
+
+-- ============================================================
+-- SPIN
+-- ============================================================
+local function toggleSpin()
+    if Config.SpinConnection then
+        Config.SpinConnection:Disconnect()
+        Config.SpinConnection = nil
+        return false
+    end
+
+    if not HumanoidRootPart then return false end
+
+    Config.SpinConnection = RunService.Heartbeat:Connect(function()
+        HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(30), 0)
+    end)
+    return true
+end
+
+-- ============================================================
+-- SWIM
+-- ============================================================
+local function toggleSwim()
+    if Config.SwimConnection then
+        Config.SwimConnection:Disconnect()
+        Config.SwimConnection = nil
+        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        return false
+    end
+
+    Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+    Config.SwimConnection = RunService.Heartbeat:Connect(function()
+        if Humanoid:GetState() ~= Enum.HumanoidStateType.Swimming then
+            Humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+        end
+    end)
+    return true
+end
+
+-- ============================================================
+-- FLY
+-- ============================================================
+local function toggleFly()
+    if Config.FlyEnabled then
+        Config.FlyEnabled = false
+        if Config.FlyBodyVel then Config.FlyBodyVel:Destroy() end
+        if Config.FlyBodyGyro then Config.FlyBodyGyro:Destroy() end
+        Humanoid.PlatformStand = false
+        return false
+    end
+
+    if not HumanoidRootPart then return false end
+
+    Config.FlyEnabled = true
+
+    Config.FlyBodyGyro = Instance.new("BodyGyro")
+    Config.FlyBodyGyro.P = 90000
+    Config.FlyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    Config.FlyBodyGyro.CFrame = HumanoidRootPart.CFrame
+    Config.FlyBodyGyro.Parent = HumanoidRootPart
+
+    Config.FlyBodyVel = Instance.new("BodyVelocity")
+    Config.FlyBodyVel.Velocity = Vector3.new(0, 0, 0)
+    Config.FlyBodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    Config.FlyBodyVel.Parent = HumanoidRootPart
+
+    Humanoid.PlatformStand = true
+
+    task.spawn(function()
+        while Config.FlyEnabled and Config.FlyBodyVel and Config.FlyBodyGyro do
+            local camera = workspace.CurrentCamera
+            local moveDirection = Vector3.new()
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDirection = moveDirection + camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDirection = moveDirection - camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDirection = moveDirection - camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDirection = moveDirection + camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveDirection = moveDirection + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveDirection = moveDirection - Vector3.new(0, 1, 0)
+            end
+
+            Config.FlyBodyVel.Velocity = moveDirection * 50
+            Config.FlyBodyGyro.CFrame = camera.CFrame
+            task.wait()
+        end
+    end)
+
+    return true
+end
+
+-- ============================================================
+-- NOCLIP
+-- ============================================================
+local function toggleNoclip()
+    if Config.NoclipEnabled then
+        Config.NoclipEnabled = false
+        if Config.NoclipConnection then
+            Config.NoclipConnection:Disconnect()
+        end
+
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+        return false
+    end
+
+    Config.NoclipEnabled = true
+    Config.NoclipConnection = RunService.Stepped:Connect(function()
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+    return true
+end
+
+-- ============================================================
+-- RAINBOW
+-- ============================================================
+local function toggleRainbow()
+    if Config.RainbowConnection then
+        Config.RainbowConnection:Disconnect()
+        Config.RainbowConnection = nil
+
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.Color = Color3.fromRGB(163, 162, 165)
+            end
+        end
+        return false
+    end
+
+    local hue = 0
+    Config.RainbowConnection = RunService.Heartbeat:Connect(function()
+        hue = (hue + 0.01) % 1
+        local color = Color3.fromHSV(hue, 0.6, 0.9)
+
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.Color = color
+            end
+        end
+    end)
+    return true
+end
+
+-- ============================================================
+-- RESPAWN AT POSITION (/RE)
+-- ============================================================
+local function respawnAtPosition()
+    local rootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+    local savedCFrame = rootPart and rootPart.CFrame
+
+    if savedCFrame then
+        LocalPlayer.CharacterAdded:Once(function(newChar)
+            task.wait(0.5)
+            local newRoot = newChar:WaitForChild("HumanoidRootPart", 3)
+            if newRoot then
+                newRoot.CFrame = savedCFrame
+            end
+        end)
+        Humanoid.Health = 0
+        showNotification("/RE", "Respawning at current position...", 2)
+    else
+        Humanoid.Health = 0
+        showNotification("/RE", "Respawning...", 2)
+    end
+end
+
+-- ============================================================
+-- CREATE UI
+-- ============================================================
+local function createUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "IYANXCODE_GLITCHER"
+    screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = 999
+    screenGui.Parent = getCoreGui()
+
+    -- Mini Button
+    local miniButton = Instance.new("ImageButton")
+    miniButton.Name = "MiniButton"
+    miniButton.Size = UDim2.new(0, 42, 0, 42)
+    miniButton.Position = UDim2.new(0, 15, 0, 15)
+    miniButton.BackgroundColor3 = Theme.Surface
+    miniButton.BorderSizePixel = 0
+    miniButton.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. LocalPlayer.UserId .. "&width=150&height=150&format=png"
+    miniButton.ScaleType = Enum.ScaleType.Crop
+    miniButton.Active = true
+    miniButton.Draggable = true
+    miniButton.Visible = false
+    miniButton.ZIndex = 10
+    miniButton.Parent = screenGui
+
+    Instance.new("UICorner", miniButton).CornerRadius = UDim.new(1, 0)
+
+    local miniStroke = Instance.new("UIStroke", miniButton)
+    miniStroke.Color = Theme.Primary
+    miniStroke.Thickness = 2
+
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 280, 0, 360)
+    mainFrame.Position = UDim2.new(0.5, -140, 0.5, -180)
+    mainFrame.BackgroundColor3 = Theme.Background
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Visible = true
+    mainFrame.Parent = screenGui
+
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+    local mainStroke = Instance.new("UIStroke", mainFrame)
+    mainStroke.Color = Theme.Primary
+    mainStroke.Thickness = 1.5
+
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 46)
+    header.BackgroundColor3 = Theme.Surface
+    header.BorderSizePixel = 0
+    header.Parent = mainFrame
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
+
+    local headerBottom = Instance.new("Frame")
+    headerBottom.Size = UDim2.new(1, 0, 0.5, 0)
+    headerBottom.Position = UDim2.new(0, 0, 0.5, 0)
+    headerBottom.BackgroundColor3 = Theme.Surface
+    headerBottom.BorderSizePixel = 0
+    headerBottom.Parent = header
+
+    local avatarFrame = Instance.new("Frame")
+    avatarFrame.Size = UDim2.new(0, 30, 0, 30)
+    avatarFrame.Position = UDim2.new(0, 10, 0, 8)
+    avatarFrame.BackgroundColor3 = Theme.Elevated
+    avatarFrame.BorderSizePixel = 0
+    avatarFrame.Parent = header
+    Instance.new("UICorner", avatarFrame).CornerRadius = UDim.new(0, 8)
+
+    local avatarImage = Instance.new("ImageLabel")
+    avatarImage.Size = UDim2.new(1, -4, 1, -4)
+    avatarImage.Position = UDim2.new(0, 2, 0, 2)
+    avatarImage.BackgroundTransparency = 1
+    avatarImage.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. LocalPlayer.UserId .. "&width=150&height=150&format=png"
+    avatarImage.ScaleType = Enum.ScaleType.Crop
+    avatarImage.Parent = avatarFrame
+    Instance.new("UICorner", avatarImage).CornerRadius = UDim.new(0, 6)
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -130, 0, 18)
+    titleLabel.Position = UDim2.new(0, 46, 0, 6)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "IYANXCODE"
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 14
+    titleLabel.TextColor3 = Theme.TextPrimary
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = header
+
+    local versionLabel = Instance.new("TextLabel")
+    versionLabel.Size = UDim2.new(1, -130, 0, 14)
+    versionLabel.Position = UDim2.new(0, 46, 0, 24)
+    versionLabel.BackgroundTransparency = 1
+    versionLabel.Text = "IYANXCODE GLITCHER v1"
+    versionLabel.Font = Enum.Font.GothamMedium
+    versionLabel.TextSize = 9
+    versionLabel.TextColor3 = Theme.TextMuted
+    versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+    versionLabel.Parent = header
+
+    -- Minimize Button
+    local minimizeBtn = Instance.new("TextButton")
+    minimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+    minimizeBtn.Position = UDim2.new(1, -60, 0, 10)
+    minimizeBtn.BackgroundTransparency = 1
+    minimizeBtn.BorderSizePixel = 0
+    minimizeBtn.Text = "−"
+    minimizeBtn.Font = Enum.Font.GothamBold
+    minimizeBtn.TextColor3 = Theme.Warning
+    minimizeBtn.TextSize = 18
+    minimizeBtn.Parent = header
+
+    minimizeBtn.MouseEnter:Connect(function()
+        minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    minimizeBtn.MouseLeave:Connect(function()
+        minimizeBtn.TextColor3 = Theme.Warning
+    end)
+    minimizeBtn.MouseButton1Click:Connect(function()
+        mainFrame.Visible = false
+        miniButton.Visible = true
+        Config.Minimized = true
+    end)
+
+    -- Close Button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 26, 0, 26)
+    closeBtn.Position = UDim2.new(1, -30, 0, 10)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextColor3 = Theme.Danger
+    closeBtn.TextSize = 14
+    closeBtn.Parent = header
+
+    closeBtn.MouseEnter:Connect(function()
+        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        closeBtn.TextColor3 = Theme.Danger
+    end)
+    closeBtn.MouseButton1Click:Connect(function()
+        stopGlitch()
+        if Config.SpinConnection then Config.SpinConnection:Disconnect() end
+        if Config.SwimConnection then Config.SwimConnection:Disconnect() end
+        if Config.FlyEnabled then toggleFly() end
+        if Config.RainbowConnection then toggleRainbow() end
+        if Config.NoclipEnabled then toggleNoclip() end
+
+        TweenService:Create(mainFrame, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(mainFrame.Position.X.Scale, mainFrame.Position.X.Offset + 140, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset + 180)
+        }):Play()
+        task.wait(0.3)
+        screenGui:Destroy()
+    end)
+
+    -- Mode Selector (LASERV3)
+    local modeLabel = Instance.new("TextLabel")
+    modeLabel.Size = UDim2.new(1, -20, 0, 16)
+    modeLabel.Position = UDim2.new(0, 10, 0, 52)
+    modeLabel.BackgroundTransparency = 1
+    modeLabel.Text = "ACTIVE MODE"
+    modeLabel.Font = Enum.Font.GothamBold
+    modeLabel.TextSize = 10
+    modeLabel.TextColor3 = Theme.Secondary
+    modeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    modeLabel.Parent = mainFrame
+
+    -- Mode Info Display
+    local modeInfoFrame = Instance.new("Frame")
+    modeInfoFrame.Size = UDim2.new(1, -20, 0, 30)
+    modeInfoFrame.Position = UDim2.new(0, 10, 0, 70)
+    modeInfoFrame.BackgroundColor3 = Theme.Primary
+    modeInfoFrame.BorderSizePixel = 0
+    modeInfoFrame.Parent = mainFrame
+
+    Instance.new("UICorner", modeInfoFrame).CornerRadius = UDim.new(0, 8)
+
+    local modeInfoStroke = Instance.new("UIStroke", modeInfoFrame)
+    modeInfoStroke.Color = Theme.Secondary
+    modeInfoStroke.Thickness = 1
+    modeInfoStroke.Transparency = 0.5
+
+    local modeInfoText = Instance.new("TextLabel")
+    modeInfoText.Size = UDim2.new(1, 0, 1, 0)
+    modeInfoText.BackgroundTransparency = 1
+    modeInfoText.Text = "LASERV3"
+    modeInfoText.Font = Enum.Font.GothamBold
+    modeInfoText.TextSize = 14
+    modeInfoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    modeInfoText.Parent = modeInfoFrame
+
+    local modeDescLabel = Instance.new("TextLabel")
+    modeDescLabel.Size = UDim2.new(1, -20, 0, 14)
+    modeDescLabel.Position = UDim2.new(0, 10, 0, 104)
+    modeDescLabel.BackgroundTransparency = 1
+    modeDescLabel.Text = "ID: 70883871260184"
+    modeDescLabel.Font = Enum.Font.GothamMedium
+    modeDescLabel.TextSize = 8
+    modeDescLabel.TextColor3 = Theme.TextMuted
+    modeDescLabel.TextXAlignment = Enum.TextXAlignment.Center
+    modeDescLabel.Parent = mainFrame
+
+    -- Activate Button
+    local activateBtn = Instance.new("TextButton")
+    activateBtn.Size = UDim2.new(1, -20, 0, 36)
+    activateBtn.Position = UDim2.new(0, 10, 0, 124)
+    activateBtn.BackgroundColor3 = Theme.Primary
+    activateBtn.BorderSizePixel = 0
+    activateBtn.Text = "▶ AKTIFKAN GLITCH"
+    activateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    activateBtn.Font = Enum.Font.GothamBold
+    activateBtn.TextSize = 12
+    activateBtn.Parent = mainFrame
+
+    Instance.new("UICorner", activateBtn).CornerRadius = UDim.new(0, 8)
+
+    activateBtn.MouseButton1Click:Connect(function()
+        if not Config.Active then
+            startGlitch()
+            activateBtn.Text = "⏹ MATIKAN GLITCH"
+            TweenService:Create(activateBtn, TweenInfo.new(0.3), { BackgroundColor3 = Theme.Danger }):Play()
+        else
+            stopGlitch()
+            activateBtn.Text = "▶ AKTIFKAN GLITCH"
+            TweenService:Create(activateBtn, TweenInfo.new(0.3), { BackgroundColor3 = Theme.Primary }):Play()
+        end
+    end)
+
+    -- Speed Slider
+    local speedLabel = Instance.new("TextLabel")
+    speedLabel.Size = UDim2.new(1, -20, 0, 16)
+    speedLabel.Position = UDim2.new(0, 10, 0, 166)
+    speedLabel.BackgroundTransparency = 1
+    speedLabel.Text = "SPEED: 1.0x"
+    speedLabel.Font = Enum.Font.GothamBold
+    speedLabel.TextSize = 10
+    speedLabel.TextColor3 = Theme.Secondary
+    speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    speedLabel.Parent = mainFrame
+
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(1, -20, 0, 32)
+    sliderBg.Position = UDim2.new(0, 10, 0, 184)
+    sliderBg.BackgroundColor3 = Theme.Surface
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = mainFrame
+    Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 8)
+
+    local sliderTrack = Instance.new("Frame")
+    sliderTrack.Size = UDim2.new(1, -24, 0, 5)
+    sliderTrack.Position = UDim2.new(0, 12, 0, 13)
+    sliderTrack.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    sliderTrack.BorderSizePixel = 0
+    sliderTrack.Parent = sliderBg
+    Instance.new("UICorner", sliderTrack).CornerRadius = UDim.new(1, 0)
+
+    local sliderFill = Instance.new("Frame")
+    sliderFill.Size = UDim2.new(0.2, 0, 1, 0)
+    sliderFill.BackgroundColor3 = Theme.Secondary
+    sliderFill.BorderSizePixel = 0
+    sliderFill.Parent = sliderTrack
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1, 0)
+
+    local sliderThumb = Instance.new("Frame")
+    sliderThumb.Size = UDim2.new(0, 14, 0, 14)
+    sliderThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+    sliderThumb.Position = UDim2.new(0.2, 0, 0.5, 0)
+    sliderThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    sliderThumb.BorderSizePixel = 0
+    sliderThumb.Parent = sliderTrack
+    Instance.new("UICorner", sliderThumb).CornerRadius = UDim.new(1, 0)
+
+    local thumbStroke = Instance.new("UIStroke", sliderThumb)
+    thumbStroke.Color = Theme.Secondary
+    thumbStroke.Thickness = 2
+
+    local function updateSpeed(rawX)
+        local x = math.clamp(rawX or 0, 0, 1)
+        local newSpeed = 0.1 + x * 4.9
+        Config.Speed = newSpeed
+
+        speedLabel.Text = string.format("SPEED: %.1fx", newSpeed)
+        sliderFill.Size = UDim2.new(x, 0, 1, 0)
+        sliderThumb.Position = UDim2.new(x, 0, 0.5, 0)
+
+        if Config.AnimTrack1 and Config.AnimTrack1.IsPlaying then
+            pcall(function() Config.AnimTrack1:AdjustSpeed(newSpeed) end)
+        end
+        if Config.AnimTrack2 and Config.AnimTrack2.IsPlaying then
+            pcall(function() Config.AnimTrack2:AdjustSpeed(newSpeed) end)
+        end
+    end
+
+    local isDragging = false
+
+    sliderThumb.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            mainFrame.Draggable = false
+            local trackPos = sliderTrack.AbsolutePosition
+            local mouseX = input.Position.X
+            local relativeX = (mouseX - trackPos.X) / sliderTrack.AbsoluteSize.X
+            updateSpeed(relativeX)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local trackPos = sliderTrack.AbsolutePosition
+            local mouseX = input.Position.X
+            local relativeX = (mouseX - trackPos.X) / sliderTrack.AbsoluteSize.X
+            updateSpeed(relativeX)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+            mainFrame.Draggable = true
+        end
+    end)
+
+    sliderTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local trackPos = sliderTrack.AbsolutePosition
+            local mouseX = input.Position.X
+            local relativeX = (mouseX - trackPos.X) / sliderTrack.AbsoluteSize.X
+            updateSpeed(relativeX)
+            isDragging = true
+            mainFrame.Draggable = false
+        end
+    end)
+
+    updateSpeed(0.2)
+
+    -- Features
+    local featuresLabel = Instance.new("TextLabel")
+    featuresLabel.Size = UDim2.new(1, -20, 0, 16)
+    featuresLabel.Position = UDim2.new(0, 10, 0, 222)
+    featuresLabel.BackgroundTransparency = 1
+    featuresLabel.Text = "FEATURES"
+    featuresLabel.Font = Enum.Font.GothamBold
+    featuresLabel.TextSize = 10
+    featuresLabel.TextColor3 = Theme.TextSecondary
+    featuresLabel.TextXAlignment = Enum.TextXAlignment.Left
+    featuresLabel.Parent = mainFrame
+
+    local function createFeatureButton(text, icon, position, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0.48, -6, 0, 30)
+        btn.Position = position
+        btn.BackgroundColor3 = Theme.Elevated
+        btn.BorderSizePixel = 0
+        btn.Text = icon .. " " .. text
+        btn.TextColor3 = Theme.TextPrimary
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 9
+        btn.Parent = mainFrame
+
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+        local btnStroke = Instance.new("UIStroke", btn)
+        btnStroke.Color = Theme.Primary
+        btnStroke.Thickness = 1
+        btnStroke.Transparency = 0.7
+
+        btn.MouseEnter:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = Theme.Surface }):Play()
+            btnStroke.Transparency = 0.3
+        end)
+
+        btn.MouseLeave:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = Theme.Elevated }):Play()
+            btnStroke.Transparency = 0.7
+        end)
+
+        local active = false
+        btn.MouseButton1Click:Connect(function()
+            active = callback()
+            if active then
+                btn.BackgroundColor3 = Theme.Success
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btnStroke.Color = Theme.Success
+                btnStroke.Transparency = 0
+            else
+                btn.BackgroundColor3 = Theme.Elevated
+                btn.TextColor3 = Theme.TextPrimary
+                btnStroke.Color = Theme.Primary
+                btnStroke.Transparency = 0.7
+            end
+        end)
+
+        return btn
+    end
+
+    createFeatureButton("SPIN", "🔄", UDim2.new(0, 10, 0, 240), toggleSpin)
+    createFeatureButton("SWIM", "🏊", UDim2.new(0.52, 0, 0, 240), toggleSwim)
+    createFeatureButton("FLY", "🚀", UDim2.new(0, 10, 0, 274), toggleFly)
+    createFeatureButton("/RE", "♻️", UDim2.new(0.52, 0, 0, 274), function() respawnAtPosition(); return true end)
+    createFeatureButton("NOCLIP", "👻", UDim2.new(0, 10, 0, 308), toggleNoclip)
+    createFeatureButton("RAINBOW", "🌈", UDim2.new(0.52, 0, 0, 308), toggleRainbow)
+
+    -- Footer
+    local footer = Instance.new("Frame")
+    footer.Size = UDim2.new(1, -20, 0, 22)
+    footer.Position = UDim2.new(0, 10, 0, 332)
+    footer.BackgroundColor3 = Theme.Surface
+    footer.BorderSizePixel = 0
+    footer.Parent = mainFrame
+    Instance.new("UICorner", footer).CornerRadius = UDim.new(0, 6)
+
+    local footerText = Instance.new("TextLabel")
+    footerText.Size = UDim2.new(1, 0, 1, 0)
+    footerText.BackgroundTransparency = 1
+    footerText.Text = "IYANXCODE — FREE VERSION"
+    footerText.Font = Enum.Font.GothamMedium
+    footerText.TextSize = 8
+    footerText.TextColor3 = Theme.TextMuted
+    footerText.Parent = footer
+
+    -- Mini button click to restore
+    miniButton.MouseButton1Click:Connect(function()
+        mainFrame.Visible = true
+        miniButton.Visible = false
+        Config.Minimized = false
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+            Size = UDim2.new(0, 280, 0, 360)
+        }):Play()
+    end)
+
+    -- Character respawn handler
+    LocalPlayer.CharacterAdded:Connect(function(newChar)
+        Character = newChar
+        Humanoid = Character:WaitForChild("Humanoid")
+        Animator = Humanoid:WaitForChild("Animator")
+        HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+        if Config.Active then
+            task.wait(1)
+            startGlitch()
+        end
+    end)
+
+    return screenGui
+end
+
+-- ============================================================
+-- LOADING SCREEN
+-- ============================================================
+local function showLoadingScreen()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "IYANXCODE_Loading"
+    screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = 2147483647
+    screenGui.IgnoreGuiInset = true
+    screenGui.Parent = getCoreGui()
+
+    local cover = Instance.new("Frame")
+    cover.Name = "FullCover"
+    cover.Size = UDim2.new(1, 0, 1, 0)
+    cover.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+    cover.BorderSizePixel = 0
+    cover.ZIndex = 2147483647
+    cover.Parent = screenGui
+
+    local container = Instance.new("Frame")
+    container.Name = "Container"
+    container.Size = UDim2.new(0, 360, 0, 280)
+    container.Position = UDim2.new(0.5, 0, 0.5, 0)
+    container.AnchorPoint = Vector2.new(0.5, 0.5)
+    container.BackgroundColor3 = Theme.Background
+    container.BorderSizePixel = 0
+    container.ZIndex = 2147483647
+    container.Parent = cover
+
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 16)
+
+    local containerStroke = Instance.new("UIStroke", container)
+    containerStroke.Color = Theme.Primary
+    containerStroke.Thickness = 1.5
+
+    local avatarFrame = Instance.new("Frame")
+    avatarFrame.Name = "Avatar"
+    avatarFrame.Size = UDim2.new(0, 85, 0, 85)
+    avatarFrame.Position = UDim2.new(0.5, -42, 0, 22)
+    avatarFrame.BackgroundColor3 = Theme.Surface
+    avatarFrame.BorderSizePixel = 0
+    avatarFrame.ZIndex = 2147483647
+    avatarFrame.Parent = container
+
+    Instance.new("UICorner", avatarFrame).CornerRadius = UDim.new(1, 0)
+
+    local avatarStroke = Instance.new("UIStroke", avatarFrame)
+    avatarStroke.Color = Theme.Primary
+    avatarStroke.Thickness = 2
+
+    local avatarImage = Instance.new("ImageLabel")
+    avatarImage.Size = UDim2.new(1, -8, 1, -8)
+    avatarImage.Position = UDim2.new(0, 4, 0, 4)
+    avatarImage.BackgroundTransparency = 1
+    avatarImage.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. LocalPlayer.UserId .. "&width=150&height=150&format=png"
+    avatarImage.ZIndex = 2147483647
+    avatarImage.Parent = avatarFrame
+    Instance.new("UICorner", avatarImage).CornerRadius = UDim.new(1, 0)
+
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "Title"
+    titleText.Size = UDim2.new(1, 0, 0, 30)
+    titleText.Position = UDim2.new(0.5, 0, 0, 118)
+    titleText.AnchorPoint = Vector2.new(0.5, 0)
+    titleText.Text = "IYANXCODE"
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextSize = 22
+    titleText.TextColor3 = Theme.TextPrimary
+    titleText.BackgroundTransparency = 1
+    titleText.ZIndex = 2147483647
+    titleText.Parent = container
+
+    local welcomeText = Instance.new("TextLabel")
+    welcomeText.Name = "Welcome"
+    welcomeText.Size = UDim2.new(1, -40, 0, 20)
+    welcomeText.Position = UDim2.new(0.5, 0, 0, 152)
+    welcomeText.AnchorPoint = Vector2.new(0.5, 0)
+    welcomeText.Text = ""
+    welcomeText.Font = Enum.Font.GothamMedium
+    welcomeText.TextSize = 13
+    welcomeText.TextColor3 = Theme.Secondary
+    welcomeText.BackgroundTransparency = 1
+    welcomeText.ZIndex = 2147483647
+    welcomeText.Parent = container
+
+    local usernameText = Instance.new("TextLabel")
+    usernameText.Name = "Username"
+    usernameText.Size = UDim2.new(1, -40, 0, 18)
+    usernameText.Position = UDim2.new(0.5, 0, 0, 174)
+    usernameText.AnchorPoint = Vector2.new(0.5, 0)
+    usernameText.Text = ""
+    usernameText.Font = Enum.Font.Gotham
+    usernameText.TextSize = 11
+    usernameText.TextColor3 = Theme.TextMuted
+    usernameText.BackgroundTransparency = 1
+    usernameText.ZIndex = 2147483647
+    usernameText.Parent = container
+
+    local statusText = Instance.new("TextLabel")
+    statusText.Name = "Status"
+    statusText.Size = UDim2.new(1, -40, 0, 16)
+    statusText.Position = UDim2.new(0.5, 0, 0, 200)
+    statusText.AnchorPoint = Vector2.new(0.5, 0)
+    statusText.Text = "Initializing..."
+    statusText.Font = Enum.Font.Gotham
+    statusText.TextSize = 10
+    statusText.TextColor3 = Theme.TextMuted
+    statusText.BackgroundTransparency = 1
+    statusText.ZIndex = 2147483647
+    statusText.Parent = container
+
+    local barBg = Instance.new("Frame")
+    barBg.Name = "BarBg"
+    barBg.Size = UDim2.new(0, 240, 0, 5)
+    barBg.Position = UDim2.new(0.5, -120, 0, 228)
+    barBg.BackgroundColor3 = Theme.Elevated
+    barBg.BorderSizePixel = 0
+    barBg.ZIndex = 2147483647
+    barBg.Parent = container
+    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+
+    local barFill = Instance.new("Frame")
+    barFill.Name = "BarFill"
+    barFill.Size = UDim2.new(0, 0, 1, 0)
+    barFill.BackgroundColor3 = Theme.Secondary
+    barFill.BorderSizePixel = 0
+    barFill.ZIndex = 2147483647
+    barFill.Parent = barBg
+    Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
+
+    local function typeText(label, text, delay)
+        for i = 1, #text do
+            if not label or not label.Parent then return end
+            label.Text = string.sub(text, 1, i)
+            task.wait(delay)
+        end
+    end
+
+    task.spawn(function()
+        typeText(welcomeText, "Welcome back, " .. LocalPlayer.Name .. "!", 0.04)
+        task.wait(0.3)
+        typeText(usernameText, "Made by IYANXCODE", 0.04)
+    end)
+
+    local loadingSteps = {
+        [0] = "Initializing...",
+        [20] = "Loading bypass engine...",
+        [40] = "Injecting animations...",
+        [60] = "Building interface...",
+        [80] = "Connecting...",
+        [100] = "Ready!"
+    }
+
+    TweenService:Create(barFill, TweenInfo.new(3.5, Enum.EasingStyle.Quad), { Size = UDim2.new(1, 0, 1, 0) }):Play()
+
+    for percent, step in pairs(loadingSteps) do
+        statusText.Text = step
+        task.wait(0.18)
+    end
+
+    task.wait(0.6)
+
+    TweenService:Create(container, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -180, -0.3, -140)
+    }):Play()
+
+    TweenService:Create(cover, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+    task.wait(0.5)
+    screenGui:Destroy()
+end
+
+-- ============================================================
+-- MAIN
+-- ============================================================
+local function main()
+    print("=== IYANXCODE GLITCHER v1 ===")
+
+    showLoadingScreen()
+    task.delay(4.5, function()
+        createUI()
+        showNotification("IYANXCODE", "Glitcher v1 Ready!", 3)
+    end)
+end
+
+-- Start the script
+main()
